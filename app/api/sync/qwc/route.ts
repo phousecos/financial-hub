@@ -53,6 +53,13 @@ function generateQWCFile(options: {
   </Scheduler>`;
   }
 
+  // AuthFlags explanation:
+  // 0x0 = All access (needed for Enterprise)
+  // 0x1 = Personal data access
+  // 0x2 = All except personal data
+  // 0xF = Full access (alternative)
+  // For Enterprise compatibility, we use 0x0
+
   return `<?xml version="1.0"?>
 <QBWCXML>
   <AppName>${appName}</AppName>
@@ -64,7 +71,10 @@ function generateQWCFile(options: {
   <OwnerID>{${ownerId}}</OwnerID>
   <FileID>{${fileId}}</FileID>
   <QBType>${qbType}</QBType>
-  <AuthFlags>0x2</AuthFlags>${schedulerXml}
+  <Style>Document</Style>
+  <AuthFlags>0x0</AuthFlags>
+  <IsReadOnly>false</IsReadOnly>
+  <Notify>true</Notify>${schedulerXml}
 </QBWCXML>`;
 }
 
