@@ -1,0 +1,20 @@
+{
+  "name": "receipt-drive-processor",
+  "version": "1.0.0",
+  "description": "Process receipts from Google Drive with Claude Vision API",
+  "main": "process-receipts.js",
+  "scripts": {
+    "start": "node process-receipts.js",
+    "watch": "nodemon process-receipts.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@supabase/supabase-js": "^2.38.0",
+    "dotenv": "^16.3.1",
+    "googleapis": "^128.0.0",
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
