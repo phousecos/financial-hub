@@ -1,20 +1,12 @@
-// lib/supabase.ts - Supabase client setup
+// lib/supabase.ts - Supabase client setup with authentication support
 
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
-// Browser client
-export const supabase = createClient(
+// Browser client for client-side operations
+export const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
-
-// For server-side operations (API routes)
-export function getSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
 
 // Helper function to get signed URL for receipt
 export async function getReceiptUrl(filePath: string): Promise<string | null> {
