@@ -137,6 +137,10 @@ export default function ImportPage() {
         bankAccount = newAccount;
       }
 
+      if (!bankAccount) {
+        throw new Error('Failed to get or create bank account');
+      }
+
       // Import transactions
       for (const txn of parsedData) {
         const { data: existing } = await supabase
