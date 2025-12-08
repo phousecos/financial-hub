@@ -210,23 +210,23 @@ export default function SyncPage() {
   if (loading) {
     return (
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-4">QuickBooks Sync</h1>
-        <p>Loading...</p>
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">QuickBooks Sync</h1>
+        <p className="text-gray-700">Loading...</p>
       </div>
     );
   }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">QuickBooks Sync</h1>
+      <h1 className="text-2xl font-bold mb-6 text-gray-900">QuickBooks Sync</h1>
 
       {/* Company Selector */}
       <div className="mb-6">
-        <label className="block text-sm font-medium mb-2">Select Company</label>
+        <label className="block text-sm font-medium mb-2 text-gray-900">Select Company</label>
         <select
           value={selectedCompanyId}
           onChange={(e) => setSelectedCompanyId(e.target.value)}
-          className="w-full max-w-md p-2 border rounded bg-white"
+          className="w-full max-w-md p-2 border rounded bg-white text-gray-900"
         >
           {companies.map((company) => (
             <option key={company.id} value={company.id}>
@@ -249,11 +249,11 @@ export default function SyncPage() {
         <div className="space-y-6">
           {/* QB Configuration */}
           <div className="bg-white p-4 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">QuickBooks Configuration</h2>
+            <h2 className="text-lg font-semibold mb-4 text-gray-900">QuickBooks Configuration</h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label className="block text-sm font-medium mb-1 text-gray-900">
                   QB Company File Path (optional)
                 </label>
                 <input
@@ -261,9 +261,9 @@ export default function SyncPage() {
                   value={qbFilePath}
                   onChange={(e) => setQbFilePath(e.target.value)}
                   placeholder="C:\Users\...\Company.qbw"
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded text-gray-900"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-600 mt-1">
                   Leave blank to use currently open QB file
                 </p>
               </div>
@@ -279,10 +279,10 @@ export default function SyncPage() {
 
           {/* Web Connector Setup */}
           <div className="bg-white p-4 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">Web Connector Setup</h2>
+            <h2 className="text-lg font-semibold mb-4 text-gray-900">Web Connector Setup</h2>
 
             <div className="space-y-3">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-700">
                 Download and import the QWC file into QuickBooks Web Connector to enable
                 syncing.
               </p>
@@ -295,8 +295,8 @@ export default function SyncPage() {
               </button>
 
               <div className="mt-4 p-3 bg-gray-50 rounded text-sm">
-                <p className="font-medium mb-2">Setup Instructions:</p>
-                <ol className="list-decimal list-inside space-y-1 text-gray-600">
+                <p className="font-medium mb-2 text-gray-900">Setup Instructions:</p>
+                <ol className="list-decimal list-inside space-y-1 text-gray-700">
                   <li>Download the QWC file above</li>
                   <li>Open QuickBooks Web Connector</li>
                   <li>Click &quot;Add an application&quot;</li>
@@ -311,7 +311,7 @@ export default function SyncPage() {
 
           {/* Sync Triggers */}
           <div className="bg-white p-4 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">Trigger Sync</h2>
+            <h2 className="text-lg font-semibold mb-4 text-gray-900">Trigger Sync</h2>
 
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -344,7 +344,7 @@ export default function SyncPage() {
               </button>
             </div>
 
-            <p className="text-xs text-gray-500 mt-3">
+            <p className="text-xs text-gray-600 mt-3">
               Clicking these buttons queues operations. Open Web Connector and click
               &quot;Update Selected&quot; to execute.
             </p>
@@ -355,13 +355,13 @@ export default function SyncPage() {
         <div className="space-y-6">
           {/* Current Status */}
           <div className="bg-white p-4 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">Sync Status</h2>
+            <h2 className="text-lg font-semibold mb-4 text-gray-900">Sync Status</h2>
 
             {syncStatus && (
               <div className="space-y-4">
                 {/* Status Badge */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Status:</span>
+                  <span className="text-sm font-medium text-gray-900">Status:</span>
                   <span
                     className={`px-2 py-1 rounded text-sm ${
                       syncStatus.status === 'syncing'
@@ -382,7 +382,7 @@ export default function SyncPage() {
                 {/* Progress Bar */}
                 {syncStatus.activeSession && (
                   <div>
-                    <div className="flex justify-between text-sm mb-1">
+                    <div className="flex justify-between text-sm mb-1 text-gray-900">
                       <span>Progress</span>
                       <span>{syncStatus.activeSession.progress}%</span>
                     </div>
@@ -392,7 +392,7 @@ export default function SyncPage() {
                         style={{ width: `${syncStatus.activeSession.progress}%` }}
                       />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-600 mt-1">
                       Step {syncStatus.activeSession.currentStep} of{' '}
                       {syncStatus.activeSession.totalSteps}
                     </p>
@@ -402,8 +402,8 @@ export default function SyncPage() {
                 {/* Last Sync */}
                 {syncStatus.lastSync && (
                   <div>
-                    <span className="text-sm font-medium">Last Sync: </span>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm font-medium text-gray-900">Last Sync: </span>
+                    <span className="text-sm text-gray-700">
                       {new Date(syncStatus.lastSync.completedAt).toLocaleString()} (
                       {syncStatus.lastSync.syncType})
                     </span>
@@ -412,21 +412,21 @@ export default function SyncPage() {
 
                 {/* Transaction Counts */}
                 <div>
-                  <span className="text-sm font-medium">Transactions by Source:</span>
+                  <span className="text-sm font-medium text-gray-900">Transactions by Source:</span>
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    <div className="text-sm">
+                    <div className="text-sm text-gray-700">
                       <span className="text-gray-600">From QB:</span>{' '}
                       {syncStatus.transactionCounts.qb_pull}
                     </div>
-                    <div className="text-sm">
+                    <div className="text-sm text-gray-700">
                       <span className="text-gray-600">Amex Import:</span>{' '}
                       {syncStatus.transactionCounts.amex_import}
                     </div>
-                    <div className="text-sm">
+                    <div className="text-sm text-gray-700">
                       <span className="text-gray-600">Bank Feed:</span>{' '}
                       {syncStatus.transactionCounts.bank_feed}
                     </div>
-                    <div className="text-sm">
+                    <div className="text-sm text-gray-700">
                       <span className="text-gray-600">Manual:</span>{' '}
                       {syncStatus.transactionCounts.manual}
                     </div>
@@ -438,7 +438,7 @@ export default function SyncPage() {
 
           {/* Recent Logs */}
           <div className="bg-white p-4 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4">Recent Sync Logs</h2>
+            <h2 className="text-lg font-semibold mb-4 text-gray-900">Recent Sync Logs</h2>
 
             {syncStatus?.recentLogs && syncStatus.recentLogs.length > 0 ? (
               <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -454,7 +454,7 @@ export default function SyncPage() {
                     }`}
                   >
                     <div className="flex justify-between">
-                      <span className="font-medium">{log.syncType}</span>
+                      <span className="font-medium text-gray-900">{log.syncType}</span>
                       <span
                         className={`text-xs ${
                           log.status === 'success'
@@ -467,7 +467,7 @@ export default function SyncPage() {
                         {log.status}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-600">
                       {new Date(log.startedAt).toLocaleString()}
                       {log.recordsProcessed > 0 && ` - ${log.recordsProcessed} records`}
                       {log.recordsFailed > 0 && ` (${log.recordsFailed} failed)`}
@@ -479,7 +479,7 @@ export default function SyncPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">No sync logs yet</p>
+              <p className="text-sm text-gray-600">No sync logs yet</p>
             )}
           </div>
         </div>

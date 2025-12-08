@@ -53,28 +53,22 @@ function generateQWCFile(options: {
   </Scheduler>`;
   }
 
-  // AuthFlags explanation:
-  // 0x0 = All access (needed for Enterprise)
-  // 0x1 = Personal data access
-  // 0x2 = All except personal data
-  // 0xF = Full access (alternative)
-  // For Enterprise compatibility, we use 0x0
+  // For QuickBooks Enterprise compatibility:
+  // - Removed Style element (can cause Enterprise rejection)
+  // - Using minimal required elements
+  // - OwnerID and FileID must have curly braces
 
   return `<?xml version="1.0"?>
 <QBWCXML>
   <AppName>${appName}</AppName>
-  <AppID>${appId}</AppID>
+  <AppID></AppID>
   <AppURL>${appUrl}</AppURL>
   <AppDescription>${appDescription}</AppDescription>
   <AppSupport>${appSupport}</AppSupport>
   <UserName>${userName}</UserName>
   <OwnerID>{${ownerId}}</OwnerID>
   <FileID>{${fileId}}</FileID>
-  <QBType>${qbType}</QBType>
-  <Style>Document</Style>
-  <AuthFlags>0x0</AuthFlags>
-  <IsReadOnly>false</IsReadOnly>
-  <Notify>true</Notify>${schedulerXml}
+  <QBType>${qbType}</QBType>${schedulerXml}
 </QBWCXML>`;
 }
 
