@@ -141,6 +141,8 @@ export default function ImportPage() {
         throw new Error('Failed to get or create bank account');
       }
 
+      const accountId = bankAccount.id;
+
       // Import transactions
       for (const txn of parsedData) {
         const { data: existing } = await supabase
@@ -160,7 +162,7 @@ export default function ImportPage() {
           .from('transactions')
           .insert([{
             company_id: selectedCompany,
-            bank_account_id: bankAccount.id,
+            bank_account_id: accountId,
             amount: txn.amount,
             transaction_date: txn.date,
             posted_date: txn.date,
