@@ -37,7 +37,8 @@ interface ExistingMatch {
 export default function MatchingPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<string>('');
-  const [unmatchedReceipts, setUnmatchedReceipts] = useState<ReceiptWithCompany[]>([]);
+  const [receipts, setReceipts] = useState<ReceiptWithCompany[]>([]);
+  const [matchStatusFilter, setMatchStatusFilter] = useState<'all' | 'matched' | 'unmatched'>('unmatched');
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithCompany | null>(null);
   const [suggestions, setSuggestions] = useState<MatchSuggestion[]>([]);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
@@ -47,19 +48,21 @@ export default function MatchingPage() {
   const [recentMatches, setRecentMatches] = useState<ExistingMatch[]>([]);
   const [showSplitMode, setShowSplitMode] = useState(false);
   const [previewReceipt, setPreviewReceipt] = useState<ReceiptWithCompany | null>(null);
+  const [receiptCounts, setReceiptCounts] = useState({ all: 0, matched: 0, unmatched: 0 });
 
   // Load companies on mount
   useEffect(() => {
     loadCompanies();
   }, []);
 
-  // Load receipts when company changes
+  // Load receipts when company or filter changes
   useEffect(() => {
     if (selectedCompany) {
-      loadUnmatchedReceipts();
+      loadReceipts();
+      loadReceiptCounts();
       loadRecentMatches();
     }
-  }, [selectedCompany]);
+  }, [selectedCompany, matchStatusFilter]);
 
   async function loadCompanies() {
     const { data } = await supabase
@@ -75,18 +78,43 @@ export default function MatchingPage() {
     setLoading(false);
   }
 
-  async function loadUnmatchedReceipts() {
-    const { data } = await supabase
+  async function loadReceipts() {
+    let query = supabase
       .from('receipts')
       .select(`*, company:companies(*)`)
       .eq('company_id', selectedCompany)
-      .eq('matched', false)
       .order('transaction_date', { ascending: false });
 
-    setUnmatchedReceipts(data || []);
+    // Apply match status filter
+    if (matchStatusFilter === 'matched') {
+      query = query.eq('matched', true);
+    } else if (matchStatusFilter === 'unmatched') {
+      query = query.eq('matched', false);
+    }
+
+    const { data } = await query;
+    setReceipts(data || []);
     setSelectedReceipt(null);
     setSuggestions([]);
     setSelectedTransactions(new Set());
+  }
+
+  async function loadReceiptCounts() {
+    // Get all receipts for this company to calculate counts
+    const { data } = await supabase
+      .from('receipts')
+      .select('matched')
+      .eq('company_id', selectedCompany);
+
+    if (data) {
+      const matched = data.filter(r => r.matched).length;
+      const unmatched = data.filter(r => !r.matched).length;
+      setReceiptCounts({
+        all: data.length,
+        matched,
+        unmatched,
+      });
+    }
   }
 
   async function loadRecentMatches() {
@@ -162,7 +190,8 @@ export default function MatchingPage() {
 
       if (data.success) {
         // Refresh data
-        await loadUnmatchedReceipts();
+        await loadReceipts();
+        await loadReceiptCounts();
         await loadRecentMatches();
         setSelectedReceipt(null);
         setSuggestions([]);
@@ -186,7 +215,8 @@ export default function MatchingPage() {
       const data = await response.json();
 
       if (data.success) {
-        await loadUnmatchedReceipts();
+        await loadReceipts();
+        await loadReceiptCounts();
         await loadRecentMatches();
       } else {
         alert(data.error || 'Failed to remove match');
@@ -210,7 +240,7 @@ export default function MatchingPage() {
 
   // Stats
   const stats = {
-    unmatched: unmatchedReceipts.length,
+    showing: receipts.length,
     recentlyMatched: recentMatches.length,
   };
 
@@ -234,56 +264,86 @@ export default function MatchingPage() {
         </div>
       </div>
 
-      {/* Company Filter */}
+      {/* Filters */}
       <div className="mt-6 bg-white shadow rounded-lg p-4">
-        <div className="max-w-xs">
-          <label htmlFor="company" className="block text-sm font-medium text-gray-700">
-            Select Company
-          </label>
-          <select
-            id="company"
-            value={selectedCompany}
-            onChange={(e) => setSelectedCompany(e.target.value)}
-            className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm text-gray-900"
-          >
-            {companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.name}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 max-w-xs">
+            <label htmlFor="company" className="block text-sm font-medium text-gray-700">
+              Company
+            </label>
+            <select
+              id="company"
+              value={selectedCompany}
+              onChange={(e) => setSelectedCompany(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm text-gray-900"
+            >
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex-1 max-w-xs">
+            <label htmlFor="matchStatus" className="block text-sm font-medium text-gray-700">
+              Match Status
+            </label>
+            <select
+              id="matchStatus"
+              value={matchStatusFilter}
+              onChange={(e) => setMatchStatusFilter(e.target.value as 'all' | 'matched' | 'unmatched')}
+              className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm text-gray-900"
+            >
+              <option value="all">All Receipts ({receiptCounts.all})</option>
+              <option value="unmatched">Unmatched ({receiptCounts.unmatched})</option>
+              <option value="matched">Matched ({receiptCounts.matched})</option>
+            </select>
+          </div>
         </div>
 
         {/* Stats */}
-        <div className="mt-4 flex gap-6 text-sm">
-          <div>
-            <span className="text-gray-500">Unmatched Receipts:</span>{' '}
-            <span className="font-semibold text-yellow-600">{stats.unmatched}</span>
+        <div className="mt-4 flex flex-wrap gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-3 h-3 rounded-full bg-yellow-400"></span>
+            <span className="text-gray-600">Unmatched:</span>
+            <span className="font-semibold text-yellow-600">{receiptCounts.unmatched}</span>
           </div>
-          <div>
-            <span className="text-gray-500">Recently Matched:</span>{' '}
-            <span className="font-semibold text-green-600">{stats.recentlyMatched}</span>
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-3 h-3 rounded-full bg-green-400"></span>
+            <span className="text-gray-600">Matched:</span>
+            <span className="font-semibold text-green-600">{receiptCounts.matched}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-600">Showing:</span>
+            <span className="font-semibold text-gray-900">{stats.showing}</span>
           </div>
         </div>
       </div>
 
       {/* Main Content - Two Column Layout */}
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column - Unmatched Receipts */}
+        {/* Left Column - Receipts */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-            <h2 className="text-lg font-medium text-gray-900">Unmatched Receipts</h2>
+            <h2 className="text-lg font-medium text-gray-900">
+              {matchStatusFilter === 'all' ? 'All Receipts' :
+               matchStatusFilter === 'matched' ? 'Matched Receipts' : 'Unmatched Receipts'}
+            </h2>
           </div>
           <div className="divide-y divide-gray-200 max-h-[600px] overflow-y-auto">
-            {unmatchedReceipts.length === 0 ? (
+            {receipts.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="mt-2">All receipts matched!</p>
+                <p className="mt-2">
+                  {matchStatusFilter === 'unmatched' ? 'All receipts matched!' :
+                   matchStatusFilter === 'matched' ? 'No matched receipts yet' : 'No receipts found'}
+                </p>
               </div>
             ) : (
-              unmatchedReceipts.map((receipt) => (
+              receipts.map((receipt) => (
                 <div
                   key={receipt.id}
                   onClick={() => selectReceipt(receipt)}
@@ -306,11 +366,22 @@ export default function MatchingPage() {
                       <p className="mt-1 text-sm text-gray-600 truncate">
                         {receipt.description || 'No description'}
                       </p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        {receipt.transaction_date
-                          ? format(new Date(receipt.transaction_date), 'MMM d, yyyy')
-                          : 'No date'}
-                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-xs text-gray-500">
+                          {receipt.transaction_date
+                            ? format(new Date(receipt.transaction_date), 'MMM d, yyyy')
+                            : 'No date'}
+                        </span>
+                        {matchStatusFilter === 'all' && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+                            receipt.matched
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {receipt.matched ? 'Matched' : 'Unmatched'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {receipt.file_url && (
