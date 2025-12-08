@@ -35,7 +35,7 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   // Define public routes that don't require authentication
-  const publicRoutes = ['/login', '/signup', '/auth/callback'];
+  const publicRoutes = ['/login', '/auth/callback'];
   const isPublicRoute = publicRoutes.some(route =>
     request.nextUrl.pathname.startsWith(route)
   );
@@ -50,8 +50,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // If user exists and trying to access login/signup, redirect to home
-  if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
+  // If user exists and trying to access login, redirect to home
+  if (user && request.nextUrl.pathname === '/login') {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
