@@ -21,44 +21,64 @@ const supabase = createClient(
 
 /**
  * Validate QBWC credentials against database
+ * Username format: sync-{companyCode} or sync-{first8chars-of-companyId}
  */
 async function validateCredentials(
   username: string,
   password: string
 ): Promise<{ valid: boolean; companyId?: string; companyFile?: string }> {
-  // Check for QBWC credentials in environment (simple setup)
-  const envUsername = process.env.QBWC_USERNAME;
   const envPassword = process.env.QBWC_PASSWORD;
-  const envCompanyId = process.env.QBWC_DEFAULT_COMPANY_ID;
 
-  if (envUsername && envPassword) {
-    if (username === envUsername && password === envPassword) {
-      // Get company file path from database
-      if (envCompanyId) {
-        const { data: company } = await supabase
-          .from('companies')
-          .select('id, qb_file_path')
-          .eq('id', envCompanyId)
-          .single();
-
-        if (company) {
-          return {
-            valid: true,
-            companyId: company.id,
-            companyFile: company.qb_file_path || undefined,
-          };
-        }
-      }
-
-      // Return without specific company (will use whatever QB has open)
-      return { valid: true, companyId: envCompanyId };
-    }
+  // Check password matches environment variable
+  if (!envPassword || password !== envPassword) {
+    console.log('[QBWC] Invalid password');
+    return { valid: false };
   }
 
-  // TODO: In production, you might want to store QBWC credentials in a qbwc_users table
-  // and validate against that, with proper password hashing
+  // Parse username to extract company identifier
+  // Format: sync-{code} or sync-{id-prefix}
+  if (!username.startsWith('sync-')) {
+    console.log('[QBWC] Invalid username format:', username);
+    return { valid: false };
+  }
 
-  return { valid: false };
+  const companyIdentifier = username.substring(5); // Remove 'sync-' prefix
+
+  console.log('[QBWC] Looking up company by identifier:', companyIdentifier);
+
+  // Try to find company by code first (case-insensitive)
+  let { data: company } = await supabase
+    .from('companies')
+    .select('id, code, qb_file_path')
+    .ilike('code', companyIdentifier)
+    .eq('active', true)
+    .single();
+
+  // If not found by code, try by ID prefix
+  if (!company) {
+    const { data: companies } = await supabase
+      .from('companies')
+      .select('id, code, qb_file_path')
+      .eq('active', true);
+
+    // Find company where ID starts with the identifier
+    company = companies?.find(c =>
+      c.id.toLowerCase().startsWith(companyIdentifier.toLowerCase())
+    ) || null;
+  }
+
+  if (!company) {
+    console.log('[QBWC] Company not found for identifier:', companyIdentifier);
+    return { valid: false };
+  }
+
+  console.log('[QBWC] Found company:', company.id, company.code);
+
+  return {
+    valid: true,
+    companyId: company.id,
+    companyFile: company.qb_file_path || undefined,
+  };
 }
 
 /**

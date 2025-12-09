@@ -287,6 +287,16 @@ export default function SyncPage() {
                 syncing.
               </p>
 
+              {/* Show the username that will be used */}
+              {syncConfig?.company && (
+                <div className="p-2 bg-blue-50 rounded text-sm">
+                  <span className="text-gray-700">Username for this company: </span>
+                  <code className="font-mono text-blue-700">
+                    sync-{syncConfig.company.code?.toLowerCase() || syncConfig.company.id.substring(0, 8)}
+                  </code>
+                </div>
+              )}
+
               <button
                 onClick={downloadQWC}
                 className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
@@ -302,9 +312,13 @@ export default function SyncPage() {
                   <li>Click &quot;Add an application&quot;</li>
                   <li>Select the downloaded QWC file</li>
                   <li>Authorize the application when prompted in QuickBooks</li>
-                  <li>Set the password in Web Connector</li>
+                  <li>Set the password in Web Connector (from QBWC_PASSWORD)</li>
                   <li>Click &quot;Update Selected&quot; to sync</li>
                 </ol>
+                <p className="mt-2 text-gray-600 italic">
+                  Each company has its own QWC file with a unique username.
+                  You can add multiple QWC files to sync different companies.
+                </p>
               </div>
             </div>
           </div>

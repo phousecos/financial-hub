@@ -126,6 +126,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Get base URL from environment or request
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
 
+    // Generate company-specific username for multi-company support
+    // Format: sync-{code} or sync-{first8chars-of-id}
+    const companyUsername = company.code
+      ? `sync-${company.code.toLowerCase()}`
+      : `sync-${company.id.substring(0, 8)}`;
+
     // Generate QWC file
     const qwcContent = generateQWCFile({
       appName: `Financial Hub - ${company.name}`,
@@ -133,7 +139,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       appUrl: `${baseUrl}/api/qbwc`,
       appDescription: `Sync transactions and receipts between Financial Hub and QuickBooks for ${company.name}`,
       appSupport: `${baseUrl}/support`,
-      userName: process.env.QBWC_USERNAME || 'admin',
+      userName: companyUsername,
       ownerId: generateFileId(), // Unique owner ID
       fileId: generateFileId(), // Unique file ID
       qbType: 'QBFS',
@@ -211,6 +217,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Get base URL from environment or request
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
 
+    // Generate company-specific username for multi-company support
+    const companyUsername = company.code
+      ? `sync-${company.code.toLowerCase()}`
+      : `sync-${company.id.substring(0, 8)}`;
+
     // Generate QWC file with custom settings
     const qwcContent = generateQWCFile({
       appName: `Financial Hub - ${company.name}`,
@@ -218,7 +229,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       appUrl: `${baseUrl}/api/qbwc`,
       appDescription: `Sync transactions and receipts between Financial Hub and QuickBooks for ${company.name}`,
       appSupport: `${baseUrl}/support`,
-      userName: userName || process.env.QBWC_USERNAME || 'admin',
+      userName: userName || companyUsername,
       ownerId: generateFileId(),
       fileId: generateFileId(),
       qbType: 'QBFS',
@@ -231,6 +242,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({
       success: true,
       content: qwcContent,
+      username: companyUsername,
       filename: `financial-hub-${company.code || company.id}.qwc`,
       instructions: [
         '1. Save the QWC file to your computer',
@@ -238,8 +250,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         '3. Click "Add an application"',
         '4. Select the saved QWC file',
         '5. Authorize the application when prompted',
-        '6. Set the password (must match QBWC_PASSWORD in your environment)',
+        `6. Set the password in Web Connector (use QBWC_PASSWORD from your .env)`,
         '7. Click "Update Selected" to start syncing',
+        `Note: This QWC uses username "${companyUsername}" which maps to ${company.name}`,
       ],
     });
   } catch (error) {
