@@ -10,6 +10,7 @@ import {
   hasPendingOperations,
   getSessionProgress,
   getCompanyIdFromTicket,
+  queueOperations,
 } from './db-session-manager';
 import {
   buildVendorQuery,
@@ -153,9 +154,33 @@ async function handleAuthenticate(
     }
 
     // Check if there's work to do (async DB call)
-    const hasWork = await hasPendingOperations(result.companyId);
+    let hasWork = await hasPendingOperations(result.companyId);
+
+    // Auto-queue sync operations if nothing is pending
+    // This enables automatic bidirectional sync on scheduled QBWC runs
     if (!hasWork) {
-      console.log('[QBWC] No pending operations for company:', result.companyId);
+      console.log('[QBWC] No pending operations - auto-queuing sync for company:', result.companyId);
+
+      try {
+        // Queue pull operations (get transactions from QB)
+        const pullOperations: Array<{ type: QBOperationType; data?: Record<string, unknown> }> = [
+          { type: 'query_checks', data: { includeLineItems: true } },
+          { type: 'query_bills', data: { includeLineItems: true } },
+          { type: 'query_credit_cards', data: { includeLineItems: true } },
+        ];
+
+        await queueOperations(result.companyId, pullOperations);
+        console.log('[QBWC] Auto-queued', pullOperations.length, 'pull operations');
+
+        // Re-check for work
+        hasWork = await hasPendingOperations(result.companyId);
+      } catch (autoQueueError) {
+        console.error('[QBWC] Error auto-queuing operations:', autoQueueError);
+      }
+    }
+
+    if (!hasWork) {
+      console.log('[QBWC] Still no pending operations for company:', result.companyId);
       return createSOAPResponse(
         'authenticate',
         `<authenticateResult><string></string><string>none</string></authenticateResult>`
