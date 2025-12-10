@@ -26,6 +26,15 @@ export default function ReceiptsPage() {
     errors?: string[];
     message?: string;
   } | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    company_id: '',
+    amount: '',
+    transaction_date: '',
+    description: '',
+    vendor: '',
+  });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadCompanies();
@@ -155,6 +164,70 @@ export default function ReceiptsPage() {
     } catch (error) {
       console.error('Error deleting receipt:', error);
       alert('Error deleting receipt');
+    }
+  }
+
+  function startEditing() {
+    if (!selectedReceipt) return;
+    setEditForm({
+      company_id: selectedReceipt.company_id || '',
+      amount: selectedReceipt.amount?.toString() || '',
+      transaction_date: selectedReceipt.transaction_date || '',
+      description: selectedReceipt.description || '',
+      vendor: selectedReceipt.vendor || '',
+    });
+    setIsEditing(true);
+  }
+
+  function cancelEditing() {
+    setIsEditing(false);
+    setEditForm({
+      company_id: '',
+      amount: '',
+      transaction_date: '',
+      description: '',
+      vendor: '',
+    });
+  }
+
+  async function saveReceipt() {
+    if (!selectedReceipt) return;
+    setSaving(true);
+
+    try {
+      const { error } = await supabase
+        .from('receipts')
+        .update({
+          company_id: editForm.company_id || null,
+          amount: editForm.amount ? parseFloat(editForm.amount) : null,
+          transaction_date: editForm.transaction_date || null,
+          description: editForm.description || null,
+          vendor: editForm.vendor || null,
+        })
+        .eq('id', selectedReceipt.id);
+
+      if (error) throw error;
+
+      // Reload receipts and update selected receipt
+      await loadReceipts();
+
+      // Find the updated receipt
+      const { data: updatedReceipt } = await supabase
+        .from('receipts')
+        .select('*, company:companies(*)')
+        .eq('id', selectedReceipt.id)
+        .single();
+
+      if (updatedReceipt) {
+        setSelectedReceipt(updatedReceipt);
+      }
+
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error saving receipt:', error);
+      alert('Error saving receipt');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -403,62 +476,159 @@ export default function ReceiptsPage() {
           >
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
-                <h2 className="text-2xl font-bold" style={{ color: '#111827' }}>Receipt Details</h2>
-                <button
-                  onClick={() => setSelectedReceipt(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
+                <h2 className="text-2xl font-bold" style={{ color: '#111827' }}>
+                  {isEditing ? 'Edit Receipt' : 'Receipt Details'}
+                </h2>
+                <div className="flex items-center gap-2">
+                  {!isEditing && (
+                    <button
+                      onClick={startEditing}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setSelectedReceipt(null);
+                      setIsEditing(false);
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Company</label>
-                  <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
-                    {selectedReceipt.company?.name || 'Unassigned'}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Amount</label>
-                  <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
-                    {selectedReceipt.amount ? `$${selectedReceipt.amount.toFixed(2)}` : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Date</label>
-                  <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
-                    {selectedReceipt.transaction_date || 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Status</label>
-                  <p className="mt-1">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        selectedReceipt.matched
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}
+              {isEditing ? (
+                /* Edit Mode */
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Company</label>
+                    <select
+                      value={editForm.company_id}
+                      onChange={(e) => setEditForm({ ...editForm, company_id: e.target.value })}
+                      className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                      style={{ color: '#1f2937' }}
                     >
-                      {selectedReceipt.matched ? 'Matched' : 'Unmatched'}
-                    </span>
-                  </p>
+                      <option value="">Select Company</option>
+                      {companies.map((company) => (
+                        <option key={company.id} value={company.id}>
+                          {company.name} {company.code ? `(${company.code})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Amount</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editForm.amount}
+                      onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+                      className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                      style={{ color: '#1f2937' }}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Date</label>
+                    <input
+                      type="date"
+                      value={editForm.transaction_date}
+                      onChange={(e) => setEditForm({ ...editForm, transaction_date: e.target.value })}
+                      className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                      style={{ color: '#1f2937' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Vendor</label>
+                    <input
+                      type="text"
+                      value={editForm.vendor}
+                      onChange={(e) => setEditForm({ ...editForm, vendor: e.target.value })}
+                      className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                      style={{ color: '#1f2937' }}
+                      placeholder="Vendor name"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Description</label>
+                    <textarea
+                      value={editForm.description}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      rows={2}
+                      className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                      style={{ color: '#1f2937' }}
+                      placeholder="Description"
+                    />
+                  </div>
+                  <div className="col-span-2 flex justify-end gap-2 mt-2">
+                    <button
+                      onClick={cancelEditing}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={saveReceipt}
+                      disabled={saving}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Description</label>
-                  <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
-                    {selectedReceipt.description || 'N/A'}
-                  </p>
+              ) : (
+                /* Display Mode */
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Company</label>
+                    <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
+                      {selectedReceipt.company?.name || 'Unassigned'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Amount</label>
+                    <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
+                      {selectedReceipt.amount ? `$${selectedReceipt.amount.toFixed(2)}` : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Date</label>
+                    <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
+                      {selectedReceipt.transaction_date || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Status</label>
+                    <p className="mt-1">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          selectedReceipt.matched
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}
+                      >
+                        {selectedReceipt.matched ? 'Matched' : 'Unmatched'}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Description</label>
+                    <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
+                      {selectedReceipt.description || 'N/A'}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* File Preview */}
               {selectedReceipt.file_url && (
