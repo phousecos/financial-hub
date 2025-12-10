@@ -11,7 +11,11 @@ import {
   parseCheckQueryResponse,
   parseBillQueryResponse,
   parseCreditCardChargeQueryResponse,
+  parseCheckAddResponse,
+  parseBillAddResponse,
+  parseCreditCardChargeAddResponse,
 } from '@/lib/qbxml/parser';
+import { getSession, getCurrentOperation } from '@/lib/qbwc/session-manager';
 
 // Create Supabase client with service role for background processing
 const supabase = createClient(
@@ -21,44 +25,64 @@ const supabase = createClient(
 
 /**
  * Validate QBWC credentials against database
+ * Username format: sync-{companyCode} or sync-{first8chars-of-companyId}
  */
 async function validateCredentials(
   username: string,
   password: string
 ): Promise<{ valid: boolean; companyId?: string; companyFile?: string }> {
-  // Check for QBWC credentials in environment (simple setup)
-  const envUsername = process.env.QBWC_USERNAME;
   const envPassword = process.env.QBWC_PASSWORD;
-  const envCompanyId = process.env.QBWC_DEFAULT_COMPANY_ID;
 
-  if (envUsername && envPassword) {
-    if (username === envUsername && password === envPassword) {
-      // Get company file path from database
-      if (envCompanyId) {
-        const { data: company } = await supabase
-          .from('companies')
-          .select('id, qb_file_path')
-          .eq('id', envCompanyId)
-          .single();
-
-        if (company) {
-          return {
-            valid: true,
-            companyId: company.id,
-            companyFile: company.qb_file_path || undefined,
-          };
-        }
-      }
-
-      // Return without specific company (will use whatever QB has open)
-      return { valid: true, companyId: envCompanyId };
-    }
+  // Check password matches environment variable
+  if (!envPassword || password !== envPassword) {
+    console.log('[QBWC] Invalid password');
+    return { valid: false };
   }
 
-  // TODO: In production, you might want to store QBWC credentials in a qbwc_users table
-  // and validate against that, with proper password hashing
+  // Parse username to extract company identifier
+  // Format: sync-{code} or sync-{id-prefix}
+  if (!username.startsWith('sync-')) {
+    console.log('[QBWC] Invalid username format:', username);
+    return { valid: false };
+  }
 
-  return { valid: false };
+  const companyIdentifier = username.substring(5); // Remove 'sync-' prefix
+
+  console.log('[QBWC] Looking up company by identifier:', companyIdentifier);
+
+  // Try to find company by code first (case-insensitive)
+  let { data: company } = await supabase
+    .from('companies')
+    .select('id, code, qb_file_path')
+    .ilike('code', companyIdentifier)
+    .eq('active', true)
+    .single();
+
+  // If not found by code, try by ID prefix
+  if (!company) {
+    const { data: companies } = await supabase
+      .from('companies')
+      .select('id, code, qb_file_path')
+      .eq('active', true);
+
+    // Find company where ID starts with the identifier
+    company = companies?.find(c =>
+      c.id.toLowerCase().startsWith(companyIdentifier.toLowerCase())
+    ) || null;
+  }
+
+  if (!company) {
+    console.log('[QBWC] Company not found for identifier:', companyIdentifier);
+    return { valid: false };
+  }
+
+  console.log('[QBWC] Found company:', company.id, company.code);
+
+  return {
+    valid: true,
+    companyId: company.id,
+    companyFile: company.qb_file_path || undefined,
+  };
 }
 
 /**
@@ -67,18 +91,24 @@ async function validateCredentials(
 async function processResponse(
   companyId: string,
   operationType: QBOperationType,
-  response: string
+  response: string,
+  operationData?: Record<string, unknown>
 ): Promise<void> {
   console.log('[QBWC] Processing response for:', operationType);
 
   try {
+    let recordsProcessed = 0;
+    const isPushOperation = operationType.startsWith('add_') || operationType.startsWith('mod_');
+    const direction = isPushOperation ? 'to_qb' : 'from_qb';
+
     switch (operationType) {
+      // ================== PULL OPERATIONS ==================
       case 'query_vendors': {
         const result = parseVendorQueryResponse(response);
         if (result.success && result.data) {
           console.log('[QBWC] Received', result.data.length, 'vendors');
+          recordsProcessed = result.data.length;
           // TODO: Store vendors in database for matching purposes
-          // Could be a qb_vendors table or vendor field autocomplete
         }
         break;
       }
@@ -87,6 +117,7 @@ async function processResponse(
         const result = parseCustomerQueryResponse(response);
         if (result.success && result.data) {
           console.log('[QBWC] Received', result.data.length, 'customers');
+          recordsProcessed = result.data.length;
           // TODO: Store customers in database
         }
         break;
@@ -96,6 +127,7 @@ async function processResponse(
         const result = parseAccountQueryResponse(response);
         if (result.success && result.data) {
           console.log('[QBWC] Received', result.data.length, 'accounts');
+          recordsProcessed = result.data.length;
           // TODO: Store accounts for bank account mapping
         }
         break;
@@ -105,7 +137,6 @@ async function processResponse(
         const result = parseCheckQueryResponse(response);
         if (result.success && result.data) {
           console.log('[QBWC] Received', result.data.length, 'checks');
-          // Import checks as transactions
           for (const check of result.data) {
             await importQBTransaction(companyId, 'Check', check.txnID, {
               amount: check.amount,
@@ -114,6 +145,7 @@ async function processResponse(
               description: check.memo,
               external_ref: check.refNumber,
             });
+            recordsProcessed++;
           }
         }
         break;
@@ -123,7 +155,6 @@ async function processResponse(
         const result = parseBillQueryResponse(response);
         if (result.success && result.data) {
           console.log('[QBWC] Received', result.data.length, 'bills');
-          // Import bills as transactions
           for (const bill of result.data) {
             await importQBTransaction(companyId, 'Bill', bill.txnID, {
               amount: bill.amount,
@@ -132,6 +163,7 @@ async function processResponse(
               description: bill.memo,
               external_ref: bill.refNumber,
             });
+            recordsProcessed++;
           }
         }
         break;
@@ -141,7 +173,6 @@ async function processResponse(
         const result = parseCreditCardChargeQueryResponse(response);
         if (result.success && result.data) {
           console.log('[QBWC] Received', result.data.length, 'credit card charges');
-          // Import CC charges as transactions
           for (const charge of result.data) {
             await importQBTransaction(companyId, 'CreditCardCharge', charge.txnID, {
               amount: charge.amount,
@@ -150,8 +181,76 @@ async function processResponse(
               description: charge.memo,
               external_ref: charge.refNumber,
             });
+            recordsProcessed++;
           }
         }
+        break;
+      }
+
+      // ================== PUSH OPERATIONS ==================
+      case 'add_check': {
+        const result = parseCheckAddResponse(response);
+        if (result.success && result.data) {
+          console.log('[QBWC] Created check in QB:', result.data.txnID);
+          // Update the local transaction with QB TxnID
+          if (operationData?.transactionId) {
+            await updateTransactionWithQBTxnId(
+              operationData.transactionId as string,
+              result.data.txnID,
+              'Check',
+              result.data.editSequence
+            );
+            recordsProcessed = 1;
+          }
+        } else {
+          console.error('[QBWC] Failed to create check:', result.statusMessage);
+        }
+        break;
+      }
+
+      case 'add_bill': {
+        const result = parseBillAddResponse(response);
+        if (result.success && result.data) {
+          console.log('[QBWC] Created bill in QB:', result.data.txnID);
+          if (operationData?.transactionId) {
+            await updateTransactionWithQBTxnId(
+              operationData.transactionId as string,
+              result.data.txnID,
+              'Bill',
+              result.data.editSequence
+            );
+            recordsProcessed = 1;
+          }
+        } else {
+          console.error('[QBWC] Failed to create bill:', result.statusMessage);
+        }
+        break;
+      }
+
+      case 'add_credit_card_charge': {
+        const result = parseCreditCardChargeAddResponse(response);
+        if (result.success && result.data) {
+          console.log('[QBWC] Created credit card charge in QB:', result.data.txnID);
+          if (operationData?.transactionId) {
+            await updateTransactionWithQBTxnId(
+              operationData.transactionId as string,
+              result.data.txnID,
+              'CreditCardCharge',
+              result.data.editSequence
+            );
+            recordsProcessed = 1;
+          }
+        } else {
+          console.error('[QBWC] Failed to create credit card charge:', result.statusMessage);
+        }
+        break;
+      }
+
+      case 'mod_check':
+      case 'mod_bill': {
+        // For mod operations, just log success
+        console.log('[QBWC] Modified transaction in QB');
+        recordsProcessed = 1;
         break;
       }
 
@@ -163,9 +262,9 @@ async function processResponse(
     await supabase.from('sync_log').insert({
       company_id: companyId,
       sync_type: operationType,
-      direction: 'from_qb',
+      direction,
       status: 'success',
-      records_processed: 1,
+      records_processed: recordsProcessed,
       records_failed: 0,
       qbxml_response: response.substring(0, 10000), // Truncate if too long
       started_at: new Date().toISOString(),
@@ -174,11 +273,14 @@ async function processResponse(
   } catch (error) {
     console.error('[QBWC] Error processing response:', error);
 
+    const isPushOperation = operationType.startsWith('add_') || operationType.startsWith('mod_');
+    const direction = isPushOperation ? 'to_qb' : 'from_qb';
+
     // Log the error
     await supabase.from('sync_log').insert({
       company_id: companyId,
       sync_type: operationType,
-      direction: 'from_qb',
+      direction,
       status: 'error',
       records_processed: 0,
       records_failed: 1,
@@ -188,6 +290,34 @@ async function processResponse(
       completed_at: new Date().toISOString(),
     });
   }
+}
+
+/**
+ * Update transaction with QB TxnID after successful push
+ */
+async function updateTransactionWithQBTxnId(
+  transactionId: string,
+  qbTxnId: string,
+  qbTxnType: string,
+  editSequence: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('transactions')
+    .update({
+      qb_txn_id: qbTxnId,
+      qb_txn_type: qbTxnType,
+      qb_edit_sequence: editSequence,
+      needs_qb_push: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', transactionId);
+
+  if (error) {
+    console.error('[QBWC] Error updating transaction with QB TxnID:', error);
+    throw error;
+  }
+
+  console.log('[QBWC] Updated transaction', transactionId, 'with QB TxnID:', qbTxnId);
 }
 
 /**
