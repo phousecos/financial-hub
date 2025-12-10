@@ -151,6 +151,20 @@ async function processFile(
 ): Promise<{ name: string; status: string; receiptId?: string }> {
   const fileName = file.name || 'unknown';
 
+  // Check for duplicate - skip if receipt with same file_name already exists
+  const { data: existingReceipt } = await supabase
+    .from('receipts')
+    .select('id, company:companies(name, code)')
+    .eq('file_name', fileName)
+    .maybeSingle();
+
+  if (existingReceipt) {
+    // Move file to processed folder even though it's a duplicate
+    const companyName = existingReceipt.company?.code || existingReceipt.company?.name || 'Unknown';
+    await moveToProcessed(file.id!, companyName, drive);
+    return { name: fileName, status: 'skipped - already processed (moved to processed)', receiptId: existingReceipt.id };
+  }
+
   // Download file
   const fileResponse = await drive.files.get(
     { fileId: file.id, alt: 'media' },

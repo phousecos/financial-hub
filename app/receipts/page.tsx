@@ -298,11 +298,11 @@ export default function ReceiptsPage() {
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No receipts</h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <h3 className="mt-2 text-sm font-medium" style={{ color: '#111827' }}>No receipts</h3>
+            <p className="mt-1 text-sm" style={{ color: '#6b7280' }}>
               Send an email to receipts@yourdomain.com to get started.
             </p>
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs" style={{ color: '#9ca3af' }}>
               Format: CompanyName | $247.89 | Description
             </p>
           </div>
@@ -323,17 +323,17 @@ export default function ReceiptsPage() {
                   )}
 
                   {/* Amount */}
-                  <div className="text-2xl font-bold text-gray-900">
+                  <div className="text-2xl font-bold" style={{ color: '#111827' }}>
                     {receipt.amount ? `$${receipt.amount.toFixed(2)}` : 'No amount'}
                   </div>
 
                   {/* Description */}
-                  <p className="mt-2 text-sm text-gray-600 line-clamp-2">
+                  <p className="mt-2 text-sm line-clamp-2" style={{ color: '#4b5563' }}>
                     {receipt.description || 'No description'}
                   </p>
 
                   {/* Date */}
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="mt-2 text-xs" style={{ color: '#6b7280' }}>
                     {receipt.transaction_date
                       ? format(new Date(receipt.transaction_date), 'MMM d, yyyy')
                       : 'No date'}
@@ -341,7 +341,7 @@ export default function ReceiptsPage() {
 
                   {/* File Info */}
                   {receipt.file_name && (
-                    <div className="mt-3 flex items-center text-xs text-gray-500">
+                    <div className="mt-3 flex items-center text-xs" style={{ color: '#6b7280' }}>
                       <svg
                         className="h-4 w-4 mr-1"
                         fill="none"
@@ -403,7 +403,7 @@ export default function ReceiptsPage() {
           >
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">Receipt Details</h2>
+                <h2 className="text-2xl font-bold" style={{ color: '#111827' }}>Receipt Details</h2>
                 <button
                   onClick={() => setSelectedReceipt(null)}
                   className="text-gray-400 hover:text-gray-600"
@@ -421,25 +421,25 @@ export default function ReceiptsPage() {
 
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-500">Company</label>
-                  <p className="mt-1 text-sm text-gray-800">
+                  <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Company</label>
+                  <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
                     {selectedReceipt.company?.name || 'Unassigned'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-500">Amount</label>
-                  <p className="mt-1 text-sm text-gray-800">
+                  <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Amount</label>
+                  <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
                     {selectedReceipt.amount ? `$${selectedReceipt.amount.toFixed(2)}` : 'N/A'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-500">Date</label>
-                  <p className="mt-1 text-sm text-gray-800">
+                  <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Date</label>
+                  <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
                     {selectedReceipt.transaction_date || 'N/A'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-500">Status</label>
+                  <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Status</label>
                   <p className="mt-1">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -453,8 +453,8 @@ export default function ReceiptsPage() {
                   </p>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-500">Description</label>
-                  <p className="mt-1 text-sm text-gray-800">
+                  <label className="block text-sm font-medium" style={{ color: '#6b7280' }}>Description</label>
+                  <p className="mt-1 text-sm" style={{ color: '#1f2937' }}>
                     {selectedReceipt.description || 'N/A'}
                   </p>
                 </div>
@@ -463,7 +463,7 @@ export default function ReceiptsPage() {
               {/* File Preview */}
               {selectedReceipt.file_url && (
                 <div className="mt-6">
-                  <label className="block text-sm font-medium text-gray-500 mb-2">
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#6b7280' }}>
                     Attachment
                   </label>
                   {loadingFileUrl ? (
@@ -508,19 +508,19 @@ export default function ReceiptsPage() {
 
               {/* Email Metadata */}
               <div className="mt-6 pt-6 border-t border-gray-200">
-                <h3 className="text-sm font-medium text-gray-500 mb-2">Email Details</h3>
+                <h3 className="text-sm font-medium mb-2" style={{ color: '#6b7280' }}>Email Details</h3>
                 <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 text-sm">
                   <div>
-                    <dt className="font-medium text-gray-500">From:</dt>
-                    <dd className="text-gray-800">{selectedReceipt.email_from}</dd>
+                    <dt className="font-medium" style={{ color: '#6b7280' }}>From:</dt>
+                    <dd style={{ color: '#1f2937' }}>{selectedReceipt.email_from}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-gray-500">Subject:</dt>
-                    <dd className="text-gray-800">{selectedReceipt.email_subject}</dd>
+                    <dt className="font-medium" style={{ color: '#6b7280' }}>Subject:</dt>
+                    <dd style={{ color: '#1f2937' }}>{selectedReceipt.email_subject}</dd>
                   </div>
                   <div>
-                    <dt className="font-medium text-gray-500">Received:</dt>
-                    <dd className="text-gray-800">
+                    <dt className="font-medium" style={{ color: '#6b7280' }}>Received:</dt>
+                    <dd style={{ color: '#1f2937' }}>
                       {selectedReceipt.email_received_at
                         ? format(new Date(selectedReceipt.email_received_at), 'PPpp')
                         : 'N/A'}
