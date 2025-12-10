@@ -3,6 +3,7 @@
 import {
   createSession,
   getCurrentOperation,
+  getSentOperation,
   markOperationSent,
   completeOperation,
   closeSession,
@@ -35,9 +36,6 @@ const MIN_SUPPORTED_VERSION = '';
 
 // Last error storage per ticket
 const lastErrors = new Map<string, string>();
-
-// Last operation ID per ticket (for tracking during receive)
-const lastOperationIds = new Map<string, string>();
 
 /**
  * Extract value from SOAP XML
@@ -277,9 +275,6 @@ async function handleSendRequestXML(xml: string): Promise<string> {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
-    // Store operation ID for receiveResponseXML to use
-    lastOperationIds.set(ticket, operation.id);
-
     return createSOAPResponse('sendRequestXML', `<sendRequestXMLResult>${escapedQbxml}</sendRequestXMLResult>`);
   } catch (error) {
     console.error('[QBWC] Error generating QBXML:', error);
@@ -318,15 +313,16 @@ async function handleReceiveResponseXML(
     console.log('[QBWC] Unescaped response length:', response.length);
   }
 
-  // Get the operation ID that was sent
-  const operationId = lastOperationIds.get(ticket);
-  if (!operationId) {
-    console.log('[QBWC] No operation ID found for ticket');
+  // Get the sent operation from the database (not in-memory, for serverless compatibility)
+  const sentOp = await getSentOperation(ticket);
+  if (!sentOp) {
+    console.log('[QBWC] No sent operation found for ticket:', ticket);
     return createSOAPResponse('receiveResponseXML', `<receiveResponseXMLResult>100</receiveResponseXMLResult>`);
   }
 
-  // Get the operation details (includes type and data)
-  const currentOp = await getCurrentOperation(ticket);
+  const operationId = sentOp.id;
+  const currentOp = sentOp; // Use the sent operation directly
+  console.log('[QBWC] Found sent operation:', operationId, 'type:', currentOp.type);
 
   // Check for QB error
   if (hresult && hresult !== '0') {
@@ -341,7 +337,6 @@ async function handleReceiveResponseXML(
 
   // Complete the operation successfully
   await completeOperation(operationId, response);
-  lastOperationIds.delete(ticket); // Clear for next operation
 
   // Get progress
   const progress = await getSessionProgress(ticket);
@@ -388,7 +383,6 @@ async function handleCloseConnection(xml: string): Promise<string> {
 
   await closeSession(ticket);
   lastErrors.delete(ticket);
-  lastOperationIds.delete(ticket);
 
   return createSOAPResponse('closeConnection', `<closeConnectionResult>OK</closeConnectionResult>`);
 }
