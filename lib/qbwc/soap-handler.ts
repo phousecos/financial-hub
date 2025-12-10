@@ -297,11 +297,26 @@ async function handleReceiveResponseXML(
   processResponse: (companyId: string, operationType: QBOperationType, response: string, operationData?: Record<string, unknown>) => Promise<void>
 ): Promise<string> {
   const ticket = extractSOAPValue(xml, 'ticket');
-  const response = extractSOAPValue(xml, 'response');
+  let response = extractSOAPValue(xml, 'response');
   const hresult = extractSOAPValue(xml, 'hresult');
   const message = extractSOAPValue(xml, 'message');
 
   console.log('[QBWC] receiveResponseXML for ticket:', ticket);
+  console.log('[QBWC] Response length:', response?.length || 0);
+
+  // Debug: Log first 500 chars of raw XML to see what we're receiving
+  console.log('[QBWC] Raw XML (first 500 chars):', xml.substring(0, 500));
+
+  // The response from QBWC is often XML-escaped - unescape it
+  if (response && response.includes('&lt;')) {
+    response = response
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'");
+    console.log('[QBWC] Unescaped response length:', response.length);
+  }
 
   // Get the operation ID that was sent
   const operationId = lastOperationIds.get(ticket);
