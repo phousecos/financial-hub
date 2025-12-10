@@ -2,13 +2,14 @@
 
 import {
   createSession,
-  getSession,
   getCurrentOperation,
   markOperationSent,
-  completeCurrentOperation,
+  completeOperation,
   closeSession,
   hasPendingOperations,
-} from './session-manager';
+  getSessionProgress,
+  getCompanyIdFromTicket,
+} from './db-session-manager';
 import {
   buildVendorQuery,
   buildCustomerQuery,
@@ -34,6 +35,9 @@ const MIN_SUPPORTED_VERSION = '';
 
 // Last error storage per ticket
 const lastErrors = new Map<string, string>();
+
+// Last operation ID per ticket (for tracking during receive)
+const lastOperationIds = new Map<string, string>();
 
 /**
  * Extract value from SOAP XML
@@ -128,8 +132,9 @@ async function handleAuthenticate(
       );
     }
 
-    // Check if there's work to do
-    if (!hasPendingOperations(result.companyId)) {
+    // Check if there's work to do (async DB call)
+    const hasWork = await hasPendingOperations(result.companyId);
+    if (!hasWork) {
       console.log('[QBWC] No pending operations for company:', result.companyId);
       return createSOAPResponse(
         'authenticate',
@@ -137,9 +142,9 @@ async function handleAuthenticate(
       );
     }
 
-    // Create session and return ticket
-    const session = createSession(result.companyId);
-    console.log('[QBWC] Session created:', session.ticket, 'with', session.operations.length, 'operations');
+    // Create session and return ticket (async DB call)
+    const session = await createSession(result.companyId);
+    console.log('[QBWC] Session created:', session.ticket, 'with', session.operationCount, 'operations');
 
     // If company file path is specified, return it; otherwise empty string
     const status = result.companyFile || '';
@@ -245,37 +250,35 @@ function generateQBXMLForOperation(type: QBOperationType, data?: Record<string, 
  * Handle sendRequestXML request
  * Returns QBXML to execute, or empty string if done
  */
-function handleSendRequestXML(xml: string): string {
+async function handleSendRequestXML(xml: string): Promise<string> {
   const ticket = extractSOAPValue(xml, 'ticket');
   const companyFileName = extractSOAPValue(xml, 'strCompanyFileName');
 
   console.log('[QBWC] sendRequestXML for ticket:', ticket, 'company file:', companyFileName);
 
-  const session = getSession(ticket);
-  if (!session) {
-    console.log('[QBWC] No session found for ticket');
-    lastErrors.set(ticket, 'Invalid session ticket');
-    return createSOAPResponse('sendRequestXML', `<sendRequestXMLResult></sendRequestXMLResult>`);
-  }
-
-  const operation = getCurrentOperation(ticket);
+  // Get next pending operation for this session from DB
+  const operation = await getCurrentOperation(ticket);
   if (!operation) {
-    console.log('[QBWC] No more operations');
+    console.log('[QBWC] No more operations for ticket:', ticket);
     return createSOAPResponse('sendRequestXML', `<sendRequestXMLResult></sendRequestXMLResult>`);
   }
 
-  console.log('[QBWC] Generating QBXML for operation:', operation.type);
+  console.log('[QBWC] Generating QBXML for operation:', operation.type, 'id:', operation.id);
 
   try {
-    const qbxml = generateQBXMLForOperation(operation.type, operation.data);
-    operation.request = qbxml;
-    markOperationSent(ticket);
+    const qbxml = generateQBXMLForOperation(operation.type, operation.data || undefined);
+
+    // Mark operation as sent and store the request XML
+    await markOperationSent(operation.id, qbxml);
 
     // Escape the QBXML for SOAP response
     const escapedQbxml = qbxml
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+
+    // Store operation ID for receiveResponseXML to use
+    lastOperationIds.set(ticket, operation.id);
 
     return createSOAPResponse('sendRequestXML', `<sendRequestXMLResult>${escapedQbxml}</sendRequestXMLResult>`);
   } catch (error) {
@@ -300,39 +303,49 @@ async function handleReceiveResponseXML(
 
   console.log('[QBWC] receiveResponseXML for ticket:', ticket);
 
-  const session = getSession(ticket);
-  if (!session) {
-    console.log('[QBWC] No session found');
+  // Get the operation ID that was sent
+  const operationId = lastOperationIds.get(ticket);
+  if (!operationId) {
+    console.log('[QBWC] No operation ID found for ticket');
     return createSOAPResponse('receiveResponseXML', `<receiveResponseXMLResult>100</receiveResponseXMLResult>`);
   }
+
+  // Get the operation details (includes type and data)
+  const currentOp = await getCurrentOperation(ticket);
 
   // Check for QB error
   if (hresult && hresult !== '0') {
     console.error('[QBWC] QB Error:', hresult, message);
     lastErrors.set(ticket, message || `QB Error: ${hresult}`);
 
-    const { percentComplete } = completeCurrentOperation(ticket, response, message);
-    return createSOAPResponse('receiveResponseXML', `<receiveResponseXMLResult>${percentComplete}</receiveResponseXMLResult>`);
+    // Complete with error
+    await completeOperation(operationId, response, message || `QB Error: ${hresult}`);
+    const progress = await getSessionProgress(ticket);
+    return createSOAPResponse('receiveResponseXML', `<receiveResponseXMLResult>${progress.percentComplete}</receiveResponseXMLResult>`);
   }
 
-  // Get current operation before completing it (includes the operation data)
-  const currentOp = getCurrentOperation(ticket);
+  // Complete the operation successfully
+  await completeOperation(operationId, response);
+  lastOperationIds.delete(ticket); // Clear for next operation
 
-  // Complete the operation
-  const { percentComplete, hasMore } = completeCurrentOperation(ticket, response);
+  // Get progress
+  const progress = await getSessionProgress(ticket);
 
-  console.log('[QBWC] Operation completed. Progress:', percentComplete, '%', hasMore ? '(more pending)' : '(done)');
+  console.log('[QBWC] Operation completed. Progress:', progress.percentComplete, '%', progress.hasMore ? '(more pending)' : '(done)');
+
+  // Get company ID for processing the response
+  const companyId = await getCompanyIdFromTicket(ticket);
 
   // Process the response asynchronously, passing operation data for transaction ID lookup
-  if (currentOp && response) {
+  if (currentOp && response && companyId) {
     try {
-      await processResponse(session.companyId, currentOp.type, response, currentOp.data);
+      await processResponse(companyId, currentOp.type, response, currentOp.data || undefined);
     } catch (error) {
       console.error('[QBWC] Error processing response:', error);
     }
   }
 
-  return createSOAPResponse('receiveResponseXML', `<receiveResponseXMLResult>${percentComplete}</receiveResponseXMLResult>`);
+  return createSOAPResponse('receiveResponseXML', `<receiveResponseXMLResult>${progress.percentComplete}</receiveResponseXMLResult>`);
 }
 
 /**
@@ -353,13 +366,14 @@ function handleConnectionError(xml: string): string {
 /**
  * Handle closeConnection request
  */
-function handleCloseConnection(xml: string): string {
+async function handleCloseConnection(xml: string): Promise<string> {
   const ticket = extractSOAPValue(xml, 'ticket');
 
   console.log('[QBWC] Closing connection for ticket:', ticket);
 
-  closeSession(ticket);
+  await closeSession(ticket);
   lastErrors.delete(ticket);
+  lastOperationIds.delete(ticket);
 
   return createSOAPResponse('closeConnection', `<closeConnectionResult>OK</closeConnectionResult>`);
 }
@@ -398,19 +412,19 @@ export async function handleSOAPRequest(
       return handleClientVersion(soapXml);
 
     case 'authenticate':
-      return handleAuthenticate(soapXml, callbacks.validateCredentials);
+      return await handleAuthenticate(soapXml, callbacks.validateCredentials);
 
     case 'sendRequestXML':
-      return handleSendRequestXML(soapXml);
+      return await handleSendRequestXML(soapXml);
 
     case 'receiveResponseXML':
-      return handleReceiveResponseXML(soapXml, callbacks.processResponse);
+      return await handleReceiveResponseXML(soapXml, callbacks.processResponse);
 
     case 'connectionError':
       return handleConnectionError(soapXml);
 
     case 'closeConnection':
-      return handleCloseConnection(soapXml);
+      return await handleCloseConnection(soapXml);
 
     case 'getLastError':
       return handleGetLastError(soapXml);

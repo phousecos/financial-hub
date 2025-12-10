@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
-import { queueOperations } from '@/lib/qbwc/session-manager';
+import { queueOperations } from '@/lib/qbwc/db-session-manager';
 import type { QBOperationType } from '@/lib/qbxml/types';
 
 // Create service client for background operations
@@ -356,8 +356,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    // Queue the operations
-    const queuedOps = queueOperations(companyId, operations);
+    // Queue the operations in the database
+    const queuedOps = await queueOperations(companyId, operations);
 
     // Log the sync trigger
     await supabase.from('sync_log').insert({
@@ -377,7 +377,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       operations: queuedOps.map((op) => ({
         id: op.id,
         type: op.type,
-        status: op.status,
       })),
       note: 'Operations will be processed when QB Web Connector connects',
     });
