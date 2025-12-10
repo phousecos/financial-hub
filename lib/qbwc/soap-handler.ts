@@ -18,8 +18,13 @@ import {
   buildCreditCardChargeQuery,
   buildHostQuery,
   buildCompanyQuery,
+  buildCheckAdd,
+  buildBillAdd,
+  buildCreditCardChargeAdd,
+  buildCheckMod,
+  buildBillMod,
 } from '../qbxml/builder';
-import type { QBOperationType } from '../qbxml/types';
+import type { QBOperationType, QBExpenseLine } from '../qbxml/types';
 
 // Server version
 const SERVER_VERSION = '1.0.0';
@@ -157,6 +162,7 @@ async function handleAuthenticate(
  */
 function generateQBXMLForOperation(type: QBOperationType, data?: Record<string, unknown>): string {
   switch (type) {
+    // Query operations (pull from QB)
     case 'query_vendors':
       return buildVendorQuery(data as Parameters<typeof buildVendorQuery>[0]);
     case 'query_customers':
@@ -169,6 +175,63 @@ function generateQBXMLForOperation(type: QBOperationType, data?: Record<string, 
       return buildBillQuery(data as Parameters<typeof buildBillQuery>[0]);
     case 'query_credit_cards':
       return buildCreditCardChargeQuery(data as Parameters<typeof buildCreditCardChargeQuery>[0]);
+
+    // Add operations (push to QB)
+    case 'add_check':
+      return buildCheckAdd({
+        accountFullName: data?.accountFullName as string,
+        payeeFullName: data?.payeeFullName as string | undefined,
+        txnDate: data?.txnDate as string,
+        refNumber: data?.refNumber as string | undefined,
+        memo: data?.memo as string | undefined,
+        isToBePrinted: data?.isToBePrinted as boolean | undefined,
+        expenseLines: data?.expenseLines as QBExpenseLine[] | undefined,
+      });
+
+    case 'add_bill':
+      return buildBillAdd({
+        vendorFullName: data?.vendorFullName as string,
+        txnDate: data?.txnDate as string,
+        dueDate: data?.dueDate as string | undefined,
+        refNumber: data?.refNumber as string | undefined,
+        memo: data?.memo as string | undefined,
+        apAccountFullName: data?.apAccountFullName as string | undefined,
+        expenseLines: data?.expenseLines as QBExpenseLine[] | undefined,
+      });
+
+    case 'add_credit_card_charge':
+      return buildCreditCardChargeAdd({
+        accountFullName: data?.accountFullName as string,
+        payeeFullName: data?.payeeFullName as string | undefined,
+        txnDate: data?.txnDate as string,
+        refNumber: data?.refNumber as string | undefined,
+        memo: data?.memo as string | undefined,
+        expenseLines: data?.expenseLines as QBExpenseLine[] | undefined,
+      });
+
+    // Modify operations (update in QB)
+    case 'mod_check':
+      return buildCheckMod({
+        txnID: data?.txnID as string,
+        editSequence: data?.editSequence as string,
+        accountFullName: data?.accountFullName as string | undefined,
+        payeeFullName: data?.payeeFullName as string | undefined,
+        txnDate: data?.txnDate as string | undefined,
+        refNumber: data?.refNumber as string | undefined,
+        memo: data?.memo as string | undefined,
+      });
+
+    case 'mod_bill':
+      return buildBillMod({
+        txnID: data?.txnID as string,
+        editSequence: data?.editSequence as string,
+        vendorFullName: data?.vendorFullName as string | undefined,
+        txnDate: data?.txnDate as string | undefined,
+        dueDate: data?.dueDate as string | undefined,
+        refNumber: data?.refNumber as string | undefined,
+        memo: data?.memo as string | undefined,
+      });
+
     default:
       // For host/company queries (used for connection testing)
       if (type === 'query_items') {
@@ -228,7 +291,7 @@ function handleSendRequestXML(xml: string): string {
  */
 async function handleReceiveResponseXML(
   xml: string,
-  processResponse: (companyId: string, operationType: QBOperationType, response: string) => Promise<void>
+  processResponse: (companyId: string, operationType: QBOperationType, response: string, operationData?: Record<string, unknown>) => Promise<void>
 ): Promise<string> {
   const ticket = extractSOAPValue(xml, 'ticket');
   const response = extractSOAPValue(xml, 'response');
@@ -252,7 +315,7 @@ async function handleReceiveResponseXML(
     return createSOAPResponse('receiveResponseXML', `<receiveResponseXMLResult>${percentComplete}</receiveResponseXMLResult>`);
   }
 
-  // Get current operation before completing it
+  // Get current operation before completing it (includes the operation data)
   const currentOp = getCurrentOperation(ticket);
 
   // Complete the operation
@@ -260,10 +323,10 @@ async function handleReceiveResponseXML(
 
   console.log('[QBWC] Operation completed. Progress:', percentComplete, '%', hasMore ? '(more pending)' : '(done)');
 
-  // Process the response asynchronously
+  // Process the response asynchronously, passing operation data for transaction ID lookup
   if (currentOp && response) {
     try {
-      await processResponse(session.companyId, currentOp.type, response);
+      await processResponse(session.companyId, currentOp.type, response, currentOp.data);
     } catch (error) {
       console.error('[QBWC] Error processing response:', error);
     }
@@ -320,7 +383,7 @@ export async function handleSOAPRequest(
   soapXml: string,
   callbacks: {
     validateCredentials: (username: string, password: string) => Promise<{ valid: boolean; companyId?: string; companyFile?: string }>;
-    processResponse: (companyId: string, operationType: QBOperationType, response: string) => Promise<void>;
+    processResponse: (companyId: string, operationType: QBOperationType, response: string, operationData?: Record<string, unknown>) => Promise<void>;
   }
 ): Promise<string> {
   const method = detectSOAPMethod(soapXml);

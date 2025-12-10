@@ -323,9 +323,9 @@ export default function SyncPage() {
             </div>
           </div>
 
-          {/* Sync Triggers */}
+          {/* Pull from QB */}
           <div className="bg-white p-4 rounded-lg shadow">
-            <h2 className="text-lg font-semibold mb-4 text-gray-900">Trigger Sync</h2>
+            <h2 className="text-lg font-semibold mb-4 text-gray-900">Pull from QuickBooks</h2>
 
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -359,9 +359,40 @@ export default function SyncPage() {
             </div>
 
             <p className="text-xs text-gray-600 mt-3">
-              Clicking these buttons queues operations. Open Web Connector and click
-              &quot;Update Selected&quot; to execute.
+              Pull data from QuickBooks into Financial Hub.
             </p>
+          </div>
+
+          {/* Push to QB */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h2 className="text-lg font-semibold mb-4 text-gray-900">Push to QuickBooks</h2>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => triggerSync('push_transactions')}
+                disabled={syncing}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+              >
+                Push Transactions
+              </button>
+              <button
+                onClick={() => triggerSync('push_with_receipts')}
+                disabled={syncing}
+                className="px-4 py-2 bg-green-700 text-white rounded hover:bg-green-800 disabled:opacity-50"
+              >
+                Push with Receipts
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600 mt-3">
+              Push transactions from Financial Hub to QuickBooks.
+              &quot;Push with Receipts&quot; includes receipt info in the QB memo field.
+            </p>
+          </div>
+
+          <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded">
+            <strong>Note:</strong> Clicking these buttons queues operations. Open QB Web Connector and click
+            &quot;Update Selected&quot; to execute.
           </div>
         </div>
 
