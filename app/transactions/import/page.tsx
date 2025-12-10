@@ -173,6 +173,7 @@ export default function ImportPage() {
             status: 'unmatched',
             needs_qb_push: true,
             receipt_matched: false,
+            no_receipt_needed: false,
           }]);
 
         if (insertError) {

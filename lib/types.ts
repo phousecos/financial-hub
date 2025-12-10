@@ -60,6 +60,7 @@ export interface Transaction {
   status: 'unmatched' | 'matched' | 'synced_to_qb';
   needs_qb_push: boolean;
   receipt_matched: boolean;
+  no_receipt_needed: boolean;
   memo: string | null;
   created_at: string;
   updated_at: string;
