@@ -30,7 +30,7 @@ const supabase = createClient(
 async function validateCredentials(
   username: string,
   password: string
-): Promise<{ valid: boolean; companyId?: string; companyFile?: string }> {
+): Promise<{ valid: boolean; companyId?: string; companyFile?: string; closingDate?: string }> {
   const envPassword = process.env.QBWC_PASSWORD;
 
   // Check if QBWC_PASSWORD is configured
@@ -60,9 +60,10 @@ async function validateCredentials(
   console.log('[QBWC] Looking up company by identifier:', companyIdentifier);
 
   // Try to find company by code first (case-insensitive)
+  // Include closing_date for audit protection
   let { data: company, error: codeError } = await supabase
     .from('companies')
-    .select('id, code, qb_file_path')
+    .select('id, code, qb_file_path, closing_date')
     .ilike('code', companyIdentifier)
     .eq('active', true)
     .single();
@@ -76,7 +77,7 @@ async function validateCredentials(
     console.log('[QBWC] Not found by code, trying ID prefix match...');
     const { data: companies, error: listError } = await supabase
       .from('companies')
-      .select('id, code, qb_file_path')
+      .select('id, code, qb_file_path, closing_date')
       .eq('active', true);
 
     if (listError) {
@@ -98,12 +99,13 @@ async function validateCredentials(
     return { valid: false };
   }
 
-  console.log('[QBWC] Authentication successful! Company:', company.id, 'Code:', company.code);
+  console.log('[QBWC] Authentication successful! Company:', company.id, 'Code:', company.code, 'Closing date:', company.closing_date || 'not set');
 
   return {
     valid: true,
     companyId: company.id,
     companyFile: company.qb_file_path || undefined,
+    closingDate: company.closing_date || undefined,
   };
 }
 
