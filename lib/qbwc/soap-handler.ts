@@ -115,13 +115,13 @@ async function handleAuthenticate(
   const username = extractSOAPValue(xml, 'strUserName');
   const password = extractSOAPValue(xml, 'strPassword');
 
-  console.log('[QBWC] Authentication attempt for user:', username);
+  console.log('[QBWC] Auth attempt - user:', username, '| pw length:', password?.length || 0);
 
   try {
     const result = await validateCredentials(username, password);
 
     if (!result.valid || !result.companyId) {
-      console.log('[QBWC] Invalid credentials');
+      console.log('[QBWC] Auth FAILED for user:', username, '- valid:', result.valid, 'companyId:', result.companyId ? 'yes' : 'no');
       return createSOAPResponse(
         'authenticate',
         `<authenticateResult><string>invalid</string><string>nvu</string></authenticateResult>`
