@@ -313,6 +313,21 @@ async function handleReceiveResponseXML(
     console.log('[QBWC] Unescaped response length:', response.length);
   }
 
+  // Strip CDATA wrapper if present (QBWC sometimes sends responses in CDATA)
+  if (response && response.includes('<![CDATA[')) {
+    response = response
+      .replace(/<!\[CDATA\[/g, '')
+      .replace(/\]\]>/g, '');
+    console.log('[QBWC] Stripped CDATA, response length:', response.length);
+  }
+
+  // Debug: Log response preview to help diagnose parsing issues
+  if (response && response.length > 0) {
+    console.log('[QBWC] Response preview (first 300 chars):', response.substring(0, 300));
+  } else {
+    console.log('[QBWC] WARNING: Response is empty or null');
+  }
+
   // Get the sent operation from the database (not in-memory, for serverless compatibility)
   const sentOp = await getSentOperation(ticket);
   if (!sentOp) {
