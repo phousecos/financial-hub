@@ -395,6 +395,7 @@ async function importQBTransaction(
     status: 'unmatched',
     needs_qb_push: false,
     receipt_matched: false,
+    no_receipt_needed: false,
   });
 
   if (error) {
