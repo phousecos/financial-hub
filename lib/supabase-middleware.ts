@@ -40,11 +40,12 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith(route)
   );
 
-  // API routes for the Drive processor should also be accessible
+  // API routes that should be accessible without authentication
   const isProcessorRoute = request.nextUrl.pathname.startsWith('/api/processor');
+  const isQBWCRoute = request.nextUrl.pathname.startsWith('/api/qbwc');
 
   // If no user and trying to access protected route, redirect to login
-  if (!user && !isPublicRoute && !isProcessorRoute) {
+  if (!user && !isPublicRoute && !isProcessorRoute && !isQBWCRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
