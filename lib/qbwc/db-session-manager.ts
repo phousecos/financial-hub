@@ -207,6 +207,41 @@ export async function getCurrentOperation(ticket: string): Promise<{
 }
 
 /**
+ * Get the operation that was sent (waiting for response)
+ */
+export async function getSentOperation(ticket: string): Promise<{
+  id: string;
+  type: QBOperationType;
+  data: Record<string, unknown> | null;
+} | null> {
+  const supabase = getSupabase();
+
+  const { data: op, error } = await supabase
+    .from('sync_operations')
+    .select('id, operation_type, operation_data')
+    .eq('session_ticket', ticket)
+    .eq('status', 'sent')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // No rows found
+      return null;
+    }
+    console.error('[QBWC-DB] Error getting sent operation:', error);
+    return null;
+  }
+
+  return {
+    id: op.id,
+    type: op.operation_type as QBOperationType,
+    data: op.operation_data,
+  };
+}
+
+/**
  * Mark an operation as sent (QBXML sent to QB)
  */
 export async function markOperationSent(
