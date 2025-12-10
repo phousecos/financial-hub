@@ -135,7 +135,7 @@ function handleClientVersion(xml: string): string {
  */
 async function handleAuthenticate(
   xml: string,
-  validateCredentials: (username: string, password: string) => Promise<{ valid: boolean; companyId?: string; companyFile?: string }>
+  validateCredentials: (username: string, password: string) => Promise<{ valid: boolean; companyId?: string; companyFile?: string; closingDate?: string }>
 ): Promise<string> {
   const username = extractSOAPValue(xml, 'strUserName');
   const password = extractSOAPValue(xml, 'strPassword');
@@ -162,15 +162,26 @@ async function handleAuthenticate(
       console.log('[QBWC] No pending operations - auto-queuing sync for company:', result.companyId);
 
       try {
-        // Queue pull operations (get transactions from QB)
+        // Calculate date filter: only sync transactions AFTER the closing date
+        // This protects closed periods from being modified
+        const closingDate = result.closingDate;
+        const fromDate = closingDate
+          ? new Date(new Date(closingDate).getTime() + 86400000).toISOString().split('T')[0] // Day after closing
+          : undefined;
+
+        if (closingDate) {
+          console.log('[QBWC] Filtering transactions after closing date:', closingDate, '-> fromDate:', fromDate);
+        }
+
+        // Queue pull operations (get transactions from QB) - only open period
         const pullOperations: Array<{ type: QBOperationType; data?: Record<string, unknown> }> = [
-          { type: 'query_checks', data: { includeLineItems: true } },
-          { type: 'query_bills', data: { includeLineItems: true } },
-          { type: 'query_credit_cards', data: { includeLineItems: true } },
+          { type: 'query_checks', data: { includeLineItems: true, fromTxnDate: fromDate } },
+          { type: 'query_bills', data: { includeLineItems: true, fromTxnDate: fromDate } },
+          { type: 'query_credit_cards', data: { includeLineItems: true, fromTxnDate: fromDate } },
         ];
 
         await queueOperations(result.companyId, pullOperations);
-        console.log('[QBWC] Auto-queued', pullOperations.length, 'pull operations');
+        console.log('[QBWC] Auto-queued', pullOperations.length, 'pull operations (from:', fromDate || 'all time', ')');
 
         // Re-check for work
         hasWork = await hasPendingOperations(result.companyId);
@@ -481,7 +492,7 @@ function handleGetLastError(xml: string): string {
 export async function handleSOAPRequest(
   soapXml: string,
   callbacks: {
-    validateCredentials: (username: string, password: string) => Promise<{ valid: boolean; companyId?: string; companyFile?: string }>;
+    validateCredentials: (username: string, password: string) => Promise<{ valid: boolean; companyId?: string; companyFile?: string; closingDate?: string }>;
     processResponse: (companyId: string, operationType: QBOperationType, response: string, operationData?: Record<string, unknown>) => Promise<void>;
   }
 ): Promise<string> {

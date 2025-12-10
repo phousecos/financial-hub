@@ -139,12 +139,12 @@ function buildReceiptMemo(
 async function getPushOperations(
   companyId: string,
   includeReceipts: boolean,
-  syncConfig: { defaultExpenseAccount?: string; defaultCreditCardAccount?: string }
+  syncConfig: { defaultExpenseAccount?: string; defaultCreditCardAccount?: string; closingDate?: string }
 ): Promise<Array<{ type: QBOperationType; data: Record<string, unknown> }>> {
   const operations: Array<{ type: QBOperationType; data: Record<string, unknown> }> = [];
 
-  // Query transactions that need to be pushed to QB
-  const { data: transactions, error } = await supabaseService
+  // Build query for transactions that need to be pushed to QB
+  let query = supabaseService
     .from('transactions')
     .select(`
       id,
@@ -167,8 +167,15 @@ async function getPushOperations(
     `)
     .eq('company_id', companyId)
     .eq('needs_qb_push', true)
-    .is('qb_txn_id', null)
-    .order('transaction_date', { ascending: true });
+    .is('qb_txn_id', null);
+
+  // Filter out transactions in closed periods (transaction_date must be AFTER closing date)
+  if (syncConfig.closingDate) {
+    query = query.gt('transaction_date', syncConfig.closingDate);
+    console.log('[Sync Trigger] Filtering push operations: only transactions after', syncConfig.closingDate);
+  }
+
+  const { data: transactions, error } = await query.order('transaction_date', { ascending: true });
 
   if (error) {
     console.error('[Sync Trigger] Error fetching transactions to push:', error);
@@ -303,10 +310,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Verify company exists and user has access
+    // Verify company exists and user has access (include closing_date for audit protection)
     const { data: company, error: companyError } = await supabase
       .from('companies')
-      .select('id, name, qb_file_path')
+      .select('id, name, qb_file_path, closing_date')
       .eq('id', companyId)
       .single();
 
@@ -328,13 +335,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         .eq('company_id', companyId)
         .single();
 
-      // Get push operations from database
+      // Get push operations from database (respects closing_date)
       operations = await getPushOperations(
         companyId,
         syncType === 'push_with_receipts',
         {
           defaultExpenseAccount: syncConfig?.default_expense_account || undefined,
           defaultCreditCardAccount: syncConfig?.default_credit_card_account || undefined,
+          closingDate: company.closing_date || undefined,
         }
       );
     } else {
