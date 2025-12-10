@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, getReceiptUrl } from '@/lib/supabase';
 import type { Receipt, Company } from '@/lib/types';
 import { format } from 'date-fns';
 
@@ -17,11 +17,36 @@ export default function ReceiptsPage() {
   const [selectedCompany, setSelectedCompany] = useState<string>('all');
   const [showMatched, setShowMatched] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithCompany | null>(null);
+  const [signedFileUrl, setSignedFileUrl] = useState<string | null>(null);
+  const [loadingFileUrl, setLoadingFileUrl] = useState(false);
 
   useEffect(() => {
     loadCompanies();
     loadReceipts();
   }, [selectedCompany, showMatched]);
+
+  // Load signed URL when a receipt is selected
+  useEffect(() => {
+    async function loadSignedUrl() {
+      if (!selectedReceipt?.file_url) {
+        setSignedFileUrl(null);
+        return;
+      }
+
+      setLoadingFileUrl(true);
+      try {
+        const url = await getReceiptUrl(selectedReceipt.file_url);
+        setSignedFileUrl(url);
+      } catch (error) {
+        console.error('Error getting signed URL:', error);
+        setSignedFileUrl(null);
+      } finally {
+        setLoadingFileUrl(false);
+      }
+    }
+
+    loadSignedUrl();
+  }, [selectedReceipt]);
 
   async function loadCompanies() {
     const { data } = await supabase
@@ -104,7 +129,7 @@ export default function ReceiptsPage() {
       {/* Filters */}
       <div className="mt-6 flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
-          <label htmlFor="company" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="company" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Company
           </label>
           <select
@@ -123,7 +148,7 @@ export default function ReceiptsPage() {
         </div>
 
         <div className="flex-1">
-          <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Status
           </label>
           <select
@@ -321,37 +346,45 @@ export default function ReceiptsPage() {
               {/* File Preview */}
               {selectedReceipt.file_url && (
                 <div className="mt-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Attachment
                   </label>
-                  {selectedReceipt.file_type?.startsWith('image/') ? (
-                    <img
-                      src={selectedReceipt.file_url}
-                      alt="Receipt"
-                      className="max-w-full h-auto rounded border"
-                    />
-                  ) : (
-                    <a
-                      href={selectedReceipt.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                    >
-                      <svg
-                        className="h-5 w-5 mr-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                  {loadingFileUrl ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                    </div>
+                  ) : signedFileUrl ? (
+                    selectedReceipt.file_type?.startsWith('image/') ? (
+                      <img
+                        src={signedFileUrl}
+                        alt="Receipt"
+                        className="max-w-full h-auto rounded border"
+                      />
+                    ) : (
+                      <a
+                        href={signedFileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                      Download {selectedReceipt.file_name}
-                    </a>
+                        <svg
+                          className="h-5 w-5 mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        Download {selectedReceipt.file_name}
+                      </a>
+                    )
+                  ) : (
+                    <p className="text-sm text-red-600">Unable to load attachment</p>
                   )}
                 </div>
               )}
