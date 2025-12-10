@@ -143,6 +143,32 @@ async function getPushOperations(
 ): Promise<Array<{ type: QBOperationType; data: Record<string, unknown> }>> {
   const operations: Array<{ type: QBOperationType; data: Record<string, unknown> }> = [];
 
+  // Fetch all source account mappings for this company (for efficient lookup)
+  const { data: accountMappings } = await supabaseService
+    .from('source_account_mapping')
+    .select('source, qb_account_name, account_type, is_default')
+    .eq('company_id', companyId);
+
+  // Build lookup maps
+  const sourceToAccount = new Map<string, string>();
+  const defaultAccounts = new Map<string, string>();
+
+  if (accountMappings) {
+    for (const mapping of accountMappings) {
+      if (mapping.source && mapping.qb_account_name) {
+        sourceToAccount.set(mapping.source, mapping.qb_account_name);
+      }
+      if (mapping.is_default && mapping.account_type && mapping.qb_account_name) {
+        defaultAccounts.set(mapping.account_type, mapping.qb_account_name);
+      }
+    }
+  }
+
+  console.log('[Sync Trigger] Loaded account mappings:', {
+    sourceMappings: sourceToAccount.size,
+    defaults: Object.fromEntries(defaultAccounts),
+  });
+
   // Build query for transactions that need to be pushed to QB
   let query = supabaseService
     .from('transactions')
@@ -193,10 +219,10 @@ async function getPushOperations(
     // Build memo with receipt info if requested
     let memo = txn.description || '';
     if (includeReceipts && txn.transaction_receipts && txn.transaction_receipts.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const receipts = txn.transaction_receipts
-        .map((tr: any) => tr.receipt)
-        .filter((r: any) => r !== null);
+      type ReceiptData = { id: string; vendor?: string; description?: string; file_url?: string };
+      const receipts = (txn.transaction_receipts as unknown as Array<{ receipt: ReceiptData | null }>)
+        .map((tr) => tr.receipt)
+        .filter((r): r is ReceiptData => r !== null);
       memo = buildReceiptMemo(txn, receipts);
     }
 
@@ -204,12 +230,31 @@ async function getPushOperations(
     // Default to credit card charge for Amex imports, check for others
     const txnType = txn.qb_txn_type || (txn.source === 'amex_csv' ? 'CreditCardCharge' : 'Check');
 
+    // Look up account name from source mapping, then defaults, then fallback
+    const getAccountName = (type: 'credit_card' | 'bank', fallback: string): string => {
+      // First try source-specific mapping
+      if (txn.source && sourceToAccount.has(txn.source)) {
+        return sourceToAccount.get(txn.source)!;
+      }
+      // Then try default for account type
+      if (defaultAccounts.has(type)) {
+        return defaultAccounts.get(type)!;
+      }
+      // Then try sync config default
+      if (type === 'credit_card' && syncConfig.defaultCreditCardAccount) {
+        return syncConfig.defaultCreditCardAccount;
+      }
+      // Finally use hardcoded fallback
+      return fallback;
+    };
+
     if (txnType === 'CreditCardCharge') {
+      const accountName = getAccountName('credit_card', 'American Express');
       operations.push({
         type: 'add_credit_card_charge',
         data: {
           transactionId: txn.id, // Store for later DB update
-          accountFullName: syncConfig.defaultCreditCardAccount || 'American Express',
+          accountFullName: accountName,
           payeeFullName: txn.payee || undefined,
           txnDate: txn.transaction_date,
           refNumber: txn.external_ref || undefined,
@@ -237,11 +282,12 @@ async function getPushOperations(
       });
     } else {
       // Default to Check
+      const accountName = getAccountName('bank', 'Checking');
       operations.push({
         type: 'add_check',
         data: {
           transactionId: txn.id,
-          accountFullName: 'Checking', // Should be configurable
+          accountFullName: accountName,
           payeeFullName: txn.payee || undefined,
           txnDate: txn.transaction_date,
           refNumber: txn.external_ref || undefined,
