@@ -119,8 +119,8 @@ export default function ReceiptsPage() {
     <div className="px-4 sm:px-0">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-3xl font-bold text-gray-900">Receipts</h1>
-          <p className="mt-2 text-sm text-gray-700">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Receipts</h1>
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
             All receipts received via email, organized by company.
           </p>
         </div>
@@ -304,25 +304,25 @@ export default function ReceiptsPage() {
 
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Company</label>
-                  <p className="mt-1 text-sm text-gray-900">
+                  <label className="block text-sm font-medium text-gray-500">Company</label>
+                  <p className="mt-1 text-sm text-gray-800">
                     {selectedReceipt.company?.name || 'Unassigned'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Amount</label>
-                  <p className="mt-1 text-sm text-gray-900">
+                  <label className="block text-sm font-medium text-gray-500">Amount</label>
+                  <p className="mt-1 text-sm text-gray-800">
                     {selectedReceipt.amount ? `$${selectedReceipt.amount.toFixed(2)}` : 'N/A'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Date</label>
-                  <p className="mt-1 text-sm text-gray-900">
+                  <label className="block text-sm font-medium text-gray-500">Date</label>
+                  <p className="mt-1 text-sm text-gray-800">
                     {selectedReceipt.transaction_date || 'N/A'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Status</label>
+                  <label className="block text-sm font-medium text-gray-500">Status</label>
                   <p className="mt-1">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -336,8 +336,8 @@ export default function ReceiptsPage() {
                   </p>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
-                  <p className="mt-1 text-sm text-gray-900">
+                  <label className="block text-sm font-medium text-gray-500">Description</label>
+                  <p className="mt-1 text-sm text-gray-800">
                     {selectedReceipt.description || 'N/A'}
                   </p>
                 </div>
@@ -346,23 +346,23 @@ export default function ReceiptsPage() {
               {/* File Preview */}
               {selectedReceipt.file_url && (
                 <div className="mt-6">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-500 mb-2">
                     Attachment
                   </label>
                   {loadingFileUrl ? (
                     <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     </div>
-                  ) : signedFileUrl ? (
+                  ) : (signedFileUrl || selectedReceipt.file_url.startsWith('http')) ? (
                     selectedReceipt.file_type?.startsWith('image/') ? (
                       <img
-                        src={signedFileUrl}
+                        src={signedFileUrl || selectedReceipt.file_url}
                         alt="Receipt"
                         className="max-w-full h-auto rounded border"
                       />
                     ) : (
                       <a
-                        href={signedFileUrl}
+                        href={signedFileUrl || selectedReceipt.file_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
@@ -384,26 +384,26 @@ export default function ReceiptsPage() {
                       </a>
                     )
                   ) : (
-                    <p className="text-sm text-red-600">Unable to load attachment</p>
+                    <p className="text-sm text-red-600">Unable to load attachment - file may not exist in storage</p>
                   )}
                 </div>
               )}
 
               {/* Email Metadata */}
               <div className="mt-6 pt-6 border-t border-gray-200">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Email Details</h3>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Email Details</h3>
                 <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 text-sm">
                   <div>
                     <dt className="font-medium text-gray-500">From:</dt>
-                    <dd className="text-gray-900">{selectedReceipt.email_from}</dd>
+                    <dd className="text-gray-800">{selectedReceipt.email_from}</dd>
                   </div>
                   <div>
                     <dt className="font-medium text-gray-500">Subject:</dt>
-                    <dd className="text-gray-900">{selectedReceipt.email_subject}</dd>
+                    <dd className="text-gray-800">{selectedReceipt.email_subject}</dd>
                   </div>
                   <div>
                     <dt className="font-medium text-gray-500">Received:</dt>
-                    <dd className="text-gray-900">
+                    <dd className="text-gray-800">
                       {selectedReceipt.email_received_at
                         ? format(new Date(selectedReceipt.email_received_at), 'PPpp')
                         : 'N/A'}
