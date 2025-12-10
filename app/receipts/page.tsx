@@ -19,6 +19,13 @@ export default function ReceiptsPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithCompany | null>(null);
   const [signedFileUrl, setSignedFileUrl] = useState<string | null>(null);
   const [loadingFileUrl, setLoadingFileUrl] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [processResult, setProcessResult] = useState<{
+    success: boolean;
+    processed?: number;
+    errors?: string[];
+    message?: string;
+  } | null>(null);
 
   useEffect(() => {
     loadCompanies();
@@ -90,6 +97,50 @@ export default function ReceiptsPage() {
     }
   }
 
+  async function processReceiptsFromDrive() {
+    setProcessing(true);
+    setProcessResult(null);
+
+    try {
+      const response = await fetch('/api/processor', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setProcessResult({
+          success: false,
+          message: data.error || 'Failed to process receipts',
+          errors: data.details ? [JSON.stringify(data.details)] : undefined,
+        });
+      } else {
+        setProcessResult({
+          success: true,
+          processed: data.processed,
+          errors: data.errors,
+          message: data.processed === 0
+            ? 'No new receipts found in Google Drive'
+            : `Processed ${data.processed} receipt(s)`,
+        });
+        // Reload receipts if any were processed
+        if (data.processed > 0) {
+          await loadReceipts();
+        }
+      }
+    } catch (error) {
+      setProcessResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to connect to processor',
+      });
+    } finally {
+      setProcessing(false);
+    }
+  }
+
   async function deleteReceipt(id: string) {
     if (!confirm('Delete this receipt? This cannot be undone.')) return;
 
@@ -117,14 +168,80 @@ export default function ReceiptsPage() {
 
   return (
     <div className="px-4 sm:px-0">
-      <div className="sm:flex sm:items-center">
+      <div className="sm:flex sm:items-center sm:justify-between">
         <div className="sm:flex-auto">
-          <h1 className="text-3xl font-bold text-gray-900">Receipts</h1>
-          <p className="mt-2 text-sm text-gray-700">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Receipts</h1>
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
             All receipts received via email, organized by company.
           </p>
         </div>
+        <div className="mt-4 sm:mt-0 sm:ml-4">
+          <button
+            onClick={processReceiptsFromDrive}
+            disabled={processing}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {processing ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing...
+              </>
+            ) : (
+              <>
+                <svg className="-ml-1 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Process from Drive
+              </>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Process Result Message */}
+      {processResult && (
+        <div className={`mt-4 p-4 rounded-md ${processResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+          <div className="flex">
+            <div className="flex-shrink-0">
+              {processResult.success ? (
+                <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              )}
+            </div>
+            <div className="ml-3">
+              <p className={`text-sm font-medium ${processResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                {processResult.message}
+              </p>
+              {processResult.errors && processResult.errors.length > 0 && (
+                <ul className="mt-2 text-sm text-red-700 list-disc list-inside">
+                  {processResult.errors.map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setProcessResult(null)}
+                className={`inline-flex rounded-md p-1.5 ${processResult.success ? 'text-green-500 hover:bg-green-100' : 'text-red-500 hover:bg-red-100'}`}
+              >
+                <span className="sr-only">Dismiss</span>
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="mt-6 flex flex-col sm:flex-row gap-4">
@@ -304,25 +421,25 @@ export default function ReceiptsPage() {
 
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Company</label>
-                  <p className="mt-1 text-sm text-gray-900">
+                  <label className="block text-sm font-medium text-gray-500">Company</label>
+                  <p className="mt-1 text-sm text-gray-800">
                     {selectedReceipt.company?.name || 'Unassigned'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Amount</label>
-                  <p className="mt-1 text-sm text-gray-900">
+                  <label className="block text-sm font-medium text-gray-500">Amount</label>
+                  <p className="mt-1 text-sm text-gray-800">
                     {selectedReceipt.amount ? `$${selectedReceipt.amount.toFixed(2)}` : 'N/A'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Date</label>
-                  <p className="mt-1 text-sm text-gray-900">
+                  <label className="block text-sm font-medium text-gray-500">Date</label>
+                  <p className="mt-1 text-sm text-gray-800">
                     {selectedReceipt.transaction_date || 'N/A'}
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Status</label>
+                  <label className="block text-sm font-medium text-gray-500">Status</label>
                   <p className="mt-1">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -336,8 +453,8 @@ export default function ReceiptsPage() {
                   </p>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
-                  <p className="mt-1 text-sm text-gray-900">
+                  <label className="block text-sm font-medium text-gray-500">Description</label>
+                  <p className="mt-1 text-sm text-gray-800">
                     {selectedReceipt.description || 'N/A'}
                   </p>
                 </div>
@@ -346,23 +463,23 @@ export default function ReceiptsPage() {
               {/* File Preview */}
               {selectedReceipt.file_url && (
                 <div className="mt-6">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-500 mb-2">
                     Attachment
                   </label>
                   {loadingFileUrl ? (
                     <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     </div>
-                  ) : signedFileUrl ? (
+                  ) : (signedFileUrl || selectedReceipt.file_url.startsWith('http')) ? (
                     selectedReceipt.file_type?.startsWith('image/') ? (
                       <img
-                        src={signedFileUrl}
+                        src={signedFileUrl || selectedReceipt.file_url}
                         alt="Receipt"
                         className="max-w-full h-auto rounded border"
                       />
                     ) : (
                       <a
-                        href={signedFileUrl}
+                        href={signedFileUrl || selectedReceipt.file_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
@@ -384,26 +501,26 @@ export default function ReceiptsPage() {
                       </a>
                     )
                   ) : (
-                    <p className="text-sm text-red-600">Unable to load attachment</p>
+                    <p className="text-sm text-red-600">Unable to load attachment - file may not exist in storage</p>
                   )}
                 </div>
               )}
 
               {/* Email Metadata */}
               <div className="mt-6 pt-6 border-t border-gray-200">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Email Details</h3>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Email Details</h3>
                 <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 text-sm">
                   <div>
                     <dt className="font-medium text-gray-500">From:</dt>
-                    <dd className="text-gray-900">{selectedReceipt.email_from}</dd>
+                    <dd className="text-gray-800">{selectedReceipt.email_from}</dd>
                   </div>
                   <div>
                     <dt className="font-medium text-gray-500">Subject:</dt>
-                    <dd className="text-gray-900">{selectedReceipt.email_subject}</dd>
+                    <dd className="text-gray-800">{selectedReceipt.email_subject}</dd>
                   </div>
                   <div>
                     <dt className="font-medium text-gray-500">Received:</dt>
-                    <dd className="text-gray-900">
+                    <dd className="text-gray-800">
                       {selectedReceipt.email_received_at
                         ? format(new Date(selectedReceipt.email_received_at), 'PPpp')
                         : 'N/A'}
