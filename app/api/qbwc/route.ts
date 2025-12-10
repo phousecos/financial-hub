@@ -33,9 +33,17 @@ async function validateCredentials(
 ): Promise<{ valid: boolean; companyId?: string; companyFile?: string }> {
   const envPassword = process.env.QBWC_PASSWORD;
 
+  // Check if QBWC_PASSWORD is configured
+  if (!envPassword) {
+    console.error('[QBWC] ERROR: QBWC_PASSWORD environment variable is not set!');
+    console.error('[QBWC] Add QBWC_PASSWORD to your .env.local file');
+    return { valid: false };
+  }
+
   // Check password matches environment variable
-  if (!envPassword || password !== envPassword) {
-    console.log('[QBWC] Invalid password');
+  if (password !== envPassword) {
+    console.log('[QBWC] Invalid password - received:', password?.substring(0, 3) + '***');
+    console.log('[QBWC] Expected password starts with:', envPassword.substring(0, 3) + '***');
     return { valid: false };
   }
 
@@ -43,6 +51,7 @@ async function validateCredentials(
   // Format: sync-{code} or sync-{id-prefix}
   if (!username.startsWith('sync-')) {
     console.log('[QBWC] Invalid username format:', username);
+    console.log('[QBWC] Username must start with "sync-" (e.g., sync-pii, sync-uph)');
     return { valid: false };
   }
 
@@ -51,24 +60,37 @@ async function validateCredentials(
   console.log('[QBWC] Looking up company by identifier:', companyIdentifier);
 
   // Try to find company by code first (case-insensitive)
-  let { data: company } = await supabase
+  let { data: company, error: codeError } = await supabase
     .from('companies')
     .select('id, code, qb_file_path')
     .ilike('code', companyIdentifier)
     .eq('active', true)
     .single();
 
+  if (codeError && codeError.code !== 'PGRST116') {
+    console.error('[QBWC] Database error looking up by code:', codeError);
+  }
+
   // If not found by code, try by ID prefix
   if (!company) {
-    const { data: companies } = await supabase
+    console.log('[QBWC] Not found by code, trying ID prefix match...');
+    const { data: companies, error: listError } = await supabase
       .from('companies')
       .select('id, code, qb_file_path')
       .eq('active', true);
+
+    if (listError) {
+      console.error('[QBWC] Database error listing companies:', listError);
+    }
 
     // Find company where ID starts with the identifier
     company = companies?.find(c =>
       c.id.toLowerCase().startsWith(companyIdentifier.toLowerCase())
     ) || null;
+
+    if (!company && companies) {
+      console.log('[QBWC] Available companies:', companies.map(c => ({ id: c.id.substring(0, 8), code: c.code })));
+    }
   }
 
   if (!company) {
@@ -76,7 +98,7 @@ async function validateCredentials(
     return { valid: false };
   }
 
-  console.log('[QBWC] Found company:', company.id, company.code);
+  console.log('[QBWC] Authentication successful! Company:', company.id, 'Code:', company.code);
 
   return {
     valid: true,
@@ -373,7 +395,7 @@ async function importQBTransaction(
 }
 
 /**
- * Handle GET request (WSDL)
+ * Handle GET request (WSDL or debug info)
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const url = new URL(request.url);
@@ -391,10 +413,52 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  // Otherwise return info
+  // Return debug info if ?debug parameter is present
+  if (url.searchParams.has('debug')) {
+    const envPassword = process.env.QBWC_PASSWORD;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+
+    // Get list of active companies
+    let companies: Array<{ id: string; code: string | null; name: string }> = [];
+    try {
+      const { data } = await supabase
+        .from('companies')
+        .select('id, code, name')
+        .eq('active', true);
+      companies = data || [];
+    } catch {
+      // Ignore errors
+    }
+
+    return NextResponse.json({
+      service: 'QB Web Connector SOAP Service',
+      config: {
+        QBWC_PASSWORD: envPassword ? `SET (${envPassword.length} chars)` : 'NOT SET ❌',
+        SUPABASE_URL: supabaseUrl ? 'SET' : 'NOT SET ❌',
+        SUPABASE_SERVICE_KEY: serviceKey ? 'SET' : 'NOT SET ❌',
+      },
+      companies: companies.map(c => ({
+        id: c.id.substring(0, 8) + '...',
+        code: c.code,
+        name: c.name,
+        username: c.code ? `sync-${c.code.toLowerCase()}` : `sync-${c.id.substring(0, 8)}`,
+      })),
+      instructions: [
+        '1. Set QBWC_PASSWORD in your .env.local file',
+        '2. Download QWC file from /sync page for each company',
+        '3. Add QWC file to QB Web Connector',
+        '4. Set password in Web Connector to match QBWC_PASSWORD',
+        '5. Click "Update Selected" in Web Connector to sync',
+      ],
+    });
+  }
+
+  // Otherwise return basic info
   return NextResponse.json({
     service: 'QB Web Connector SOAP Service',
     wsdl: `${url.origin}/api/qbwc?wsdl`,
+    debug: `${url.origin}/api/qbwc?debug`,
     status: 'ready',
   });
 }
