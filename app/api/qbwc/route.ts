@@ -169,6 +169,9 @@ async function processResponse(
             });
             recordsProcessed++;
           }
+        } else {
+          console.error('[QBWC] Failed to parse checks:', result.statusCode, result.statusMessage);
+          console.error('[QBWC] Response preview:', response?.substring(0, 500));
         }
         break;
       }
@@ -187,6 +190,9 @@ async function processResponse(
             });
             recordsProcessed++;
           }
+        } else {
+          console.error('[QBWC] Failed to parse bills:', result.statusCode, result.statusMessage);
+          console.error('[QBWC] Response preview:', response?.substring(0, 500));
         }
         break;
       }
@@ -205,6 +211,9 @@ async function processResponse(
             });
             recordsProcessed++;
           }
+        } else {
+          console.error('[QBWC] Failed to parse credit card charges:', result.statusCode, result.statusMessage);
+          console.error('[QBWC] Response preview:', response?.substring(0, 500));
         }
         break;
       }
