@@ -113,7 +113,8 @@ function calculateMatchScore(
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const transactionId = searchParams.get('transaction_id');
-  const minConfidence = parseInt(searchParams.get('min_confidence') || '20');
+  // Set minConfidence to 0 by default to show ALL receipts
+  const minConfidence = parseInt(searchParams.get('min_confidence') || '0');
 
   if (!transactionId) {
     return NextResponse.json(
@@ -153,28 +154,29 @@ export async function GET(request: Request) {
 
     if (receiptError) throw receiptError;
 
-    // Score each receipt
+    // Score each receipt - show ALL receipts, sorted by match confidence
     const scored: ReceiptSuggestion[] = [];
 
     for (const receipt of receipts || []) {
       const { confidence, reasons } = calculateMatchScore(transaction, receipt);
 
+      // Include all receipts regardless of confidence score
       if (confidence >= minConfidence) {
         scored.push({
           receipt_id: receipt.id,
           confidence,
-          reasons,
+          reasons: reasons.length > 0 ? reasons : ['Manual selection'],
           receipt,
         });
       }
     }
 
-    // Sort by confidence descending
+    // Sort by confidence descending (best matches first)
     scored.sort((a, b) => b.confidence - a.confidence);
 
     return NextResponse.json({
       success: true,
-      suggestions: scored.slice(0, 10), // Top 10 suggestions
+      suggestions: scored, // Return all receipts, not just top 10
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

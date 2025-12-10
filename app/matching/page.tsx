@@ -85,17 +85,30 @@ export default function MatchingPage() {
       .eq('company_id', selectedCompany)
       .order('transaction_date', { ascending: false });
 
-    // Apply match status filter
+    // Apply match status filter (handle case where no_receipt_needed column may not exist yet)
     if (matchStatusFilter === 'matched') {
       query = query.eq('receipt_matched', true);
     } else if (matchStatusFilter === 'unmatched') {
-      query = query.eq('receipt_matched', false).eq('no_receipt_needed', false);
+      query = query.eq('receipt_matched', false);
     } else if (matchStatusFilter === 'no_receipt') {
       query = query.eq('no_receipt_needed', true);
     }
 
-    const { data } = await query;
-    setTransactions(data || []);
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error loading transactions:', error);
+      setTransactions([]);
+      return;
+    }
+
+    // Client-side filter for unmatched to handle missing no_receipt_needed column
+    let filtered = data || [];
+    if (matchStatusFilter === 'unmatched') {
+      filtered = filtered.filter(t => !t.no_receipt_needed);
+    }
+
+    setTransactions(filtered);
     setSelectedTransaction(null);
     setSuggestions([]);
     setSelectedReceipt(null);
@@ -103,10 +116,32 @@ export default function MatchingPage() {
 
   async function loadTransactionCounts() {
     // Get all transactions for this company to calculate counts
-    const { data } = await supabase
+    // Note: no_receipt_needed may not exist if migration hasn't run yet
+    const { data, error } = await supabase
       .from('transactions')
       .select('receipt_matched, no_receipt_needed')
       .eq('company_id', selectedCompany);
+
+    if (error) {
+      console.error('Error loading transaction counts:', error);
+      // Fallback: try without no_receipt_needed column
+      const { data: fallbackData } = await supabase
+        .from('transactions')
+        .select('receipt_matched')
+        .eq('company_id', selectedCompany);
+
+      if (fallbackData) {
+        const matched = fallbackData.filter(t => t.receipt_matched).length;
+        const unmatched = fallbackData.filter(t => !t.receipt_matched).length;
+        setTransactionCounts({
+          all: fallbackData.length,
+          matched,
+          unmatched,
+          no_receipt: 0,
+        });
+      }
+      return;
+    }
 
     if (data) {
       const matched = data.filter(t => t.receipt_matched).length;
