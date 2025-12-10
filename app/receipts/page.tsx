@@ -19,6 +19,13 @@ export default function ReceiptsPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithCompany | null>(null);
   const [signedFileUrl, setSignedFileUrl] = useState<string | null>(null);
   const [loadingFileUrl, setLoadingFileUrl] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [processResult, setProcessResult] = useState<{
+    success: boolean;
+    processed?: number;
+    errors?: string[];
+    message?: string;
+  } | null>(null);
 
   useEffect(() => {
     loadCompanies();
@@ -90,6 +97,50 @@ export default function ReceiptsPage() {
     }
   }
 
+  async function processReceiptsFromDrive() {
+    setProcessing(true);
+    setProcessResult(null);
+
+    try {
+      const response = await fetch('/api/processor', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setProcessResult({
+          success: false,
+          message: data.error || 'Failed to process receipts',
+          errors: data.details ? [JSON.stringify(data.details)] : undefined,
+        });
+      } else {
+        setProcessResult({
+          success: true,
+          processed: data.processed,
+          errors: data.errors,
+          message: data.processed === 0
+            ? 'No new receipts found in Google Drive'
+            : `Processed ${data.processed} receipt(s)`,
+        });
+        // Reload receipts if any were processed
+        if (data.processed > 0) {
+          await loadReceipts();
+        }
+      }
+    } catch (error) {
+      setProcessResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to connect to processor',
+      });
+    } finally {
+      setProcessing(false);
+    }
+  }
+
   async function deleteReceipt(id: string) {
     if (!confirm('Delete this receipt? This cannot be undone.')) return;
 
@@ -117,14 +168,80 @@ export default function ReceiptsPage() {
 
   return (
     <div className="px-4 sm:px-0">
-      <div className="sm:flex sm:items-center">
+      <div className="sm:flex sm:items-center sm:justify-between">
         <div className="sm:flex-auto">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Receipts</h1>
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
             All receipts received via email, organized by company.
           </p>
         </div>
+        <div className="mt-4 sm:mt-0 sm:ml-4">
+          <button
+            onClick={processReceiptsFromDrive}
+            disabled={processing}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {processing ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing...
+              </>
+            ) : (
+              <>
+                <svg className="-ml-1 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Process from Drive
+              </>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Process Result Message */}
+      {processResult && (
+        <div className={`mt-4 p-4 rounded-md ${processResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+          <div className="flex">
+            <div className="flex-shrink-0">
+              {processResult.success ? (
+                <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              )}
+            </div>
+            <div className="ml-3">
+              <p className={`text-sm font-medium ${processResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                {processResult.message}
+              </p>
+              {processResult.errors && processResult.errors.length > 0 && (
+                <ul className="mt-2 text-sm text-red-700 list-disc list-inside">
+                  {processResult.errors.map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setProcessResult(null)}
+                className={`inline-flex rounded-md p-1.5 ${processResult.success ? 'text-green-500 hover:bg-green-100' : 'text-red-500 hover:bg-red-100'}`}
+              >
+                <span className="sr-only">Dismiss</span>
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="mt-6 flex flex-col sm:flex-row gap-4">
