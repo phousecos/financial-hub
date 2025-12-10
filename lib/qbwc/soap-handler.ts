@@ -39,11 +39,33 @@ const lastErrors = new Map<string, string>();
 
 /**
  * Extract value from SOAP XML
+ * Handles both namespaced and non-namespaced tags
  */
 function extractSOAPValue(xml: string, tagName: string): string {
-  const regex = new RegExp(`<[^:]*:?${tagName}[^>]*>([\\s\\S]*?)<\\/[^:]*:?${tagName}>`, 'i');
-  const match = xml.match(regex);
-  return match ? match[1].trim() : '';
+  // Try multiple patterns to handle different QBWC message formats
+
+  // Pattern 1: Simple tag without namespace (most common)
+  const simpleRegex = new RegExp(`<${tagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tagName}>`, 'i');
+  let match = xml.match(simpleRegex);
+  if (match) {
+    return match[1].trim();
+  }
+
+  // Pattern 2: Tag with namespace prefix (e.g., <qb:response>)
+  const nsRegex = new RegExp(`<[a-zA-Z0-9]+:${tagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/[a-zA-Z0-9]+:${tagName}>`, 'i');
+  match = xml.match(nsRegex);
+  if (match) {
+    return match[1].trim();
+  }
+
+  // Pattern 3: Self-closing tag (empty value)
+  const selfClosingRegex = new RegExp(`<${tagName}\\s*/>`, 'i');
+  if (xml.match(selfClosingRegex)) {
+    return '';
+  }
+
+  console.log(`[QBWC] extractSOAPValue: Could not find <${tagName}> in XML`);
+  return '';
 }
 
 /**
@@ -297,10 +319,24 @@ async function handleReceiveResponseXML(
   const message = extractSOAPValue(xml, 'message');
 
   console.log('[QBWC] receiveResponseXML for ticket:', ticket);
-  console.log('[QBWC] Response length:', response?.length || 0);
+  console.log('[QBWC] Extracted response length:', response?.length || 0);
 
-  // Debug: Log first 500 chars of raw XML to see what we're receiving
-  console.log('[QBWC] Raw XML (first 500 chars):', xml.substring(0, 500));
+  // Debug: Log the structure of the incoming SOAP message to understand format
+  console.log('[QBWC] Raw SOAP (first 800 chars):', xml.substring(0, 800));
+
+  // Check if response extraction failed - look for the response tag manually
+  if (!response || response.length === 0) {
+    const responseTagIndex = xml.indexOf('<response');
+    const responseEndIndex = xml.indexOf('</response>');
+    console.log('[QBWC] DEBUG: <response> tag found at index:', responseTagIndex);
+    console.log('[QBWC] DEBUG: </response> tag found at index:', responseEndIndex);
+    if (responseTagIndex > -1 && responseEndIndex > responseTagIndex) {
+      // Extract manually if regex failed
+      const startTagEnd = xml.indexOf('>', responseTagIndex) + 1;
+      response = xml.substring(startTagEnd, responseEndIndex);
+      console.log('[QBWC] DEBUG: Manually extracted response, length:', response.length);
+    }
+  }
 
   // The response from QBWC is often XML-escaped - unescape it
   if (response && response.includes('&lt;')) {
