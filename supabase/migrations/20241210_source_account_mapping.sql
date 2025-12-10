@@ -27,40 +27,29 @@ CREATE INDEX IF NOT EXISTS idx_source_account_mapping_default
 -- Enable RLS
 ALTER TABLE source_account_mapping ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can view their company's mappings
-CREATE POLICY "Users can view company mappings" ON source_account_mapping
-  FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_companies uc
-      WHERE uc.company_id = source_account_mapping.company_id
-      AND uc.user_id = auth.uid()
-    )
-  );
+-- Policy: Authenticated users can view mappings
+CREATE POLICY "Authenticated users can view source_account_mapping"
+  ON source_account_mapping FOR SELECT
+  TO authenticated
+  USING (true);
 
--- Policy: Users can manage their company's mappings
-CREATE POLICY "Users can manage company mappings" ON source_account_mapping
-  FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_companies uc
-      WHERE uc.company_id = source_account_mapping.company_id
-      AND uc.user_id = auth.uid()
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM user_companies uc
-      WHERE uc.company_id = source_account_mapping.company_id
-      AND uc.user_id = auth.uid()
-    )
-  );
-
--- Policy: Service role full access (for background processing)
-CREATE POLICY "Service role full access" ON source_account_mapping
-  FOR ALL
-  USING (true)
+-- Policy: Authenticated users can insert mappings
+CREATE POLICY "Authenticated users can insert source_account_mapping"
+  ON source_account_mapping FOR INSERT
+  TO authenticated
   WITH CHECK (true);
+
+-- Policy: Authenticated users can update mappings
+CREATE POLICY "Authenticated users can update source_account_mapping"
+  ON source_account_mapping FOR UPDATE
+  TO authenticated
+  USING (true);
+
+-- Policy: Authenticated users can delete mappings
+CREATE POLICY "Authenticated users can delete source_account_mapping"
+  ON source_account_mapping FOR DELETE
+  TO authenticated
+  USING (true);
 
 -- Add comment
 COMMENT ON TABLE source_account_mapping IS 'Maps import sources (amex_csv, live_oak, etc.) to QuickBooks account names for multi-account support';
