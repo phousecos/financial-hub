@@ -26,6 +26,7 @@ export default function ReceiptsPage() {
     total?: number;
     remaining?: number;
     errors?: string[];
+    files?: { name: string; status: string }[];
     message?: string;
   } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -162,6 +163,7 @@ export default function ReceiptsPage() {
           total: data.total,
           remaining: data.remaining,
           errors: data.errors,
+          files: data.files,
           message,
         });
         // Reload receipts if any were processed
@@ -328,6 +330,23 @@ export default function ReceiptsPage() {
                     <li key={i}>{err}</li>
                   ))}
                 </ul>
+              )}
+              {processResult.files && processResult.files.length > 0 && (
+                <details className="mt-2">
+                  <summary className="text-sm text-gray-600 cursor-pointer hover:text-gray-800">
+                    View file details ({processResult.files.length} files)
+                  </summary>
+                  <ul className="mt-1 text-xs text-gray-600 list-none space-y-1">
+                    {processResult.files.map((file, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className={`flex-shrink-0 ${file.status.startsWith('success') ? 'text-green-600' : file.status.startsWith('skipped') ? 'text-yellow-600' : 'text-red-600'}`}>
+                          {file.status.startsWith('success') ? '✓' : file.status.startsWith('skipped') ? '○' : '✗'}
+                        </span>
+                        <span><strong>{file.name}</strong>: {file.status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
             </div>
             <div className="ml-auto pl-3">
