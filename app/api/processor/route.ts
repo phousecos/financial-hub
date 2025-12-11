@@ -231,6 +231,7 @@ async function processFile(
     .single();
 
   let companyId = company?.id;
+  let companyNotMatched = false;
 
   if (!companyId) {
     // Try name match
@@ -242,7 +243,33 @@ async function processFile(
     companyId = nameMatch?.id;
   }
 
-  // Upload to Supabase Storage (use 'unassigned' folder if no company)
+  if (!companyId) {
+    companyNotMatched = true;
+    // Find or create "Unassigned" company as fallback (DB requires company_id)
+    const { data: unassigned } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('code', 'UNASSIGNED')
+      .single();
+
+    if (unassigned) {
+      companyId = unassigned.id;
+    } else {
+      // Create the Unassigned company
+      const { data: newCompany, error: createError } = await supabase
+        .from('companies')
+        .insert([{ name: 'Unassigned', code: 'UNASSIGNED' }])
+        .select()
+        .single();
+
+      if (createError) {
+        throw new Error(`Failed to create Unassigned company: ${createError.message}`);
+      }
+      companyId = newCompany.id;
+    }
+  }
+
+  // Upload to Supabase Storage
   const folderName = companyId || 'unassigned';
   const storagePath = `${folderName}/${Date.now()}-${fileName}`;
   const { error: uploadError } = await supabase.storage
@@ -284,9 +311,9 @@ async function processFile(
   // Move file to processed folder
   await moveToProcessed(file.id!, receiptData.companyName || 'Unassigned', drive);
 
-  const status = companyId
-    ? 'success'
-    : `success (no company match for "${receiptData.companyName}" - needs manual assignment)`;
+  const status = companyNotMatched
+    ? `success (no company match for "${receiptData.companyName}" - assigned to Unassigned)`
+    : 'success';
   return { name: fileName, status, receiptId: receipt.id };
 }
 
