@@ -216,11 +216,7 @@ async function processFile(
     throw new Error(`Upload failed: ${uploadError.message}`);
   }
 
-  const { data: urlData } = supabase.storage
-    .from('receipts')
-    .getPublicUrl(storagePath);
-
-  // Create receipt record
+  // Create receipt record - store path (not public URL) so signed URLs can be generated
   const { data: receipt, error: receiptError } = await supabase
     .from('receipts')
     .insert([{
@@ -229,7 +225,7 @@ async function processFile(
       transaction_date: receiptData.date,
       description: receiptData.description,
       vendor: receiptData.vendor,
-      file_url: urlData.publicUrl,
+      file_url: storagePath,
       file_name: fileName,
       file_type: file.mimeType,
       email_subject: null,

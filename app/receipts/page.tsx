@@ -49,17 +49,18 @@ export default function ReceiptsPage() {
         return;
       }
 
-      // If file_url is already a full URL, use it directly
-      if (selectedReceipt.file_url.startsWith('http')) {
-        setSignedFileUrl(selectedReceipt.file_url);
-        return;
-      }
-
-      // Otherwise, get a signed URL for the storage path
       setLoadingFileUrl(true);
       try {
-        const url = await getReceiptUrl(selectedReceipt.file_url);
-        setSignedFileUrl(url);
+        // If file_url is already a full URL (legacy data), try to use it directly
+        // Otherwise generate a signed URL from the storage path
+        if (selectedReceipt.file_url.startsWith('http')) {
+          // Legacy: try the URL directly, but it may fail if bucket is not public
+          setSignedFileUrl(selectedReceipt.file_url);
+        } else {
+          // New format: generate signed URL from path
+          const url = await getReceiptUrl(selectedReceipt.file_url);
+          setSignedFileUrl(url);
+        }
       } catch (error) {
         console.error('Error getting signed URL:', error);
         setSignedFileUrl(null);
@@ -250,8 +251,8 @@ export default function ReceiptsPage() {
     <div className="px-4 sm:px-0">
       <div className="sm:flex sm:items-center sm:justify-between">
         <div className="sm:flex-auto">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Receipts</h1>
-          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+          <h1 className="text-3xl font-bold" style={{ color: '#111827' }}>Receipts</h1>
+          <p className="mt-2 text-sm" style={{ color: '#374151' }}>
             All receipts received via email, organized by company.
           </p>
         </div>
@@ -326,7 +327,7 @@ export default function ReceiptsPage() {
       {/* Filters */}
       <div className="mt-6 flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
-          <label htmlFor="company" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label htmlFor="company" className="block text-sm font-medium" style={{ color: '#374151' }}>
             Company
           </label>
           <select
@@ -345,7 +346,7 @@ export default function ReceiptsPage() {
         </div>
 
         <div className="flex-1">
-          <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label htmlFor="status" className="block text-sm font-medium" style={{ color: '#374151' }}>
             Status
           </label>
           <select
