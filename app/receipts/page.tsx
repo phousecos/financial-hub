@@ -140,6 +140,14 @@ export default function ReceiptsPage() {
         let message = '';
         if (data.processed === 0 && data.total === 0) {
           message = 'No new receipts found in Google Drive';
+          // Add debug info if available
+          if (data.debug) {
+            if (data.debug.allFilesInFolder === 0) {
+              message += ' (folder is empty)';
+            } else {
+              message += ` (found ${data.debug.allFilesInFolder} file(s) but none are PDFs/images)`;
+            }
+          }
         } else if (data.processed === 0) {
           message = `Checked ${data.total} file(s), none needed processing`;
         } else {
