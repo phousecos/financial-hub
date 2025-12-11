@@ -120,7 +120,8 @@ async function processReceipts(): Promise<ProcessResult> {
     pageSize: 100,
   });
   const allFilesInFolder = allFilesResponse.data.files || [];
-  console.log(`Total files in folder: ${allFilesInFolder.length}`, allFilesInFolder.map((f: { name: string; mimeType: string }) => ({ name: f.name, type: f.mimeType })));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  console.log(`Total files in folder: ${allFilesInFolder.length}`, allFilesInFolder.map((f: any) => ({ name: f.name, type: f.mimeType })));
 
   // List files in the unprocessed folder (only images and PDFs)
   const response = await drive.files.list({
@@ -141,7 +142,8 @@ async function processReceipts(): Promise<ProcessResult> {
       files: [],
       debug: {
         allFilesInFolder: allFilesInFolder.length,
-        fileTypes: allFilesInFolder.map((f: { name: string; mimeType: string }) => ({ name: f.name, type: f.mimeType })).slice(0, 10),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        fileTypes: allFilesInFolder.map((f: any) => ({ name: f.name, type: f.mimeType })).slice(0, 10),
       }
     };
   }
