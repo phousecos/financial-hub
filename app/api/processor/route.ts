@@ -37,6 +37,10 @@ interface ProcessResult {
   remaining: number;
   errors: string[];
   files: { name: string; status: string; receiptId?: string }[];
+  debug?: {
+    allFilesInFolder: number;
+    fileTypes: { name: string; type: string }[];
+  };
 }
 
 // Verify the request has proper authorization
@@ -79,6 +83,9 @@ export async function GET(request: Request) {
       success: true,
       ...result,
       timestamp: new Date().toISOString(),
+      config: {
+        folderId: CONFIG.DRIVE_FOLDER_ID ? `...${CONFIG.DRIVE_FOLDER_ID.slice(-8)}` : 'NOT SET',
+      },
     });
   } catch (error) {
     console.error('Processor error:', error);
@@ -110,7 +117,17 @@ async function processReceipts(): Promise<ProcessResult> {
   });
   const drive = google.drive({ version: 'v3', auth });
 
-  // List files in the unprocessed folder
+  // First, list ALL files in the folder to help debug
+  const allFilesResponse = await drive.files.list({
+    q: `'${CONFIG.DRIVE_FOLDER_ID}' in parents and trashed=false`,
+    fields: 'files(id, name, mimeType)',
+    pageSize: 100,
+  });
+  const allFilesInFolder = allFilesResponse.data.files || [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  console.log(`Total files in folder: ${allFilesInFolder.length}`, allFilesInFolder.map((f: any) => ({ name: f.name, type: f.mimeType })));
+
+  // List files in the unprocessed folder (only images and PDFs)
   const response = await drive.files.list({
     q: `'${CONFIG.DRIVE_FOLDER_ID}' in parents and trashed=false and (mimeType contains 'image/' or mimeType='application/pdf')`,
     fields: 'files(id, name, mimeType, createdTime)',
@@ -120,7 +137,19 @@ async function processReceipts(): Promise<ProcessResult> {
   const files = response.data.files;
 
   if (!files || files.length === 0) {
-    return { processed: 0, total: 0, remaining: 0, errors: [], files: [] };
+    // Return debug info about what IS in the folder
+    return {
+      processed: 0,
+      total: 0,
+      remaining: 0,
+      errors: [],
+      files: [],
+      debug: {
+        allFilesInFolder: allFilesInFolder.length,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        fileTypes: allFilesInFolder.map((f: any) => ({ name: f.name, type: f.mimeType })).slice(0, 10),
+      }
+    };
   }
 
   result.total = files.length;
