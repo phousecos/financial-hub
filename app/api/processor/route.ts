@@ -37,6 +37,10 @@ interface ProcessResult {
   remaining: number;
   errors: string[];
   files: { name: string; status: string; receiptId?: string }[];
+  debug?: {
+    allFilesInFolder: number;
+    fileTypes: { name: string; type: string }[];
+  };
 }
 
 // Verify the request has proper authorization
