@@ -163,7 +163,7 @@ async function processReceipts(): Promise<ProcessResult> {
     try {
       const fileResult = await processFile(file, drive, anthropic, supabase);
       result.files.push(fileResult);
-      if (fileResult.status === 'success') {
+      if (fileResult.status.startsWith('success')) {
         result.processed++;
       }
     } catch (error) {
@@ -218,7 +218,9 @@ async function processFile(
   const receiptData = await extractReceiptData(fileBuffer, file.mimeType!, fileName, anthropic);
 
   if (!receiptData) {
-    return { name: fileName, status: 'skipped - could not extract data' };
+    // Move to processed/failed so it doesn't retry forever
+    await moveToProcessed(file.id!, 'Failed', drive);
+    return { name: fileName, status: 'skipped - could not extract data (moved to Failed folder)' };
   }
 
   // Find company
@@ -240,12 +242,9 @@ async function processFile(
     companyId = nameMatch?.id;
   }
 
-  if (!companyId) {
-    return { name: fileName, status: `skipped - company not found: ${receiptData.companyName}` };
-  }
-
-  // Upload to Supabase Storage
-  const storagePath = `${companyId}/${Date.now()}-${fileName}`;
+  // Upload to Supabase Storage (use 'unassigned' folder if no company)
+  const folderName = companyId || 'unassigned';
+  const storagePath = `${folderName}/${Date.now()}-${fileName}`;
   const { error: uploadError } = await supabase.storage
     .from('receipts')
     .upload(storagePath, fileBuffer, {
@@ -283,9 +282,12 @@ async function processFile(
   }
 
   // Move file to processed folder
-  await moveToProcessed(file.id!, receiptData.companyName, drive);
+  await moveToProcessed(file.id!, receiptData.companyName || 'Unassigned', drive);
 
-  return { name: fileName, status: 'success', receiptId: receipt.id };
+  const status = companyId
+    ? 'success'
+    : `success (no company match for "${receiptData.companyName}" - needs manual assignment)`;
+  return { name: fileName, status, receiptId: receipt.id };
 }
 
 async function extractReceiptData(
