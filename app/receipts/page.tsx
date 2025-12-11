@@ -49,6 +49,13 @@ export default function ReceiptsPage() {
         return;
       }
 
+      // If file_url is already a full URL, use it directly
+      if (selectedReceipt.file_url.startsWith('http')) {
+        setSignedFileUrl(selectedReceipt.file_url);
+        return;
+      }
+
+      // Otherwise, get a signed URL for the storage path
       setLoadingFileUrl(true);
       try {
         const url = await getReceiptUrl(selectedReceipt.file_url);
