@@ -23,6 +23,8 @@ export default function ReceiptsPage() {
   const [processResult, setProcessResult] = useState<{
     success: boolean;
     processed?: number;
+    total?: number;
+    remaining?: number;
     errors?: string[];
     message?: string;
   } | null>(null);
@@ -135,13 +137,24 @@ export default function ReceiptsPage() {
           errors: data.details ? [JSON.stringify(data.details)] : undefined,
         });
       } else {
+        let message = '';
+        if (data.processed === 0 && data.total === 0) {
+          message = 'No new receipts found in Google Drive';
+        } else if (data.processed === 0) {
+          message = `Checked ${data.total} file(s), none needed processing`;
+        } else {
+          message = `Processed ${data.processed} receipt(s)`;
+          if (data.remaining > 0) {
+            message += ` (${data.remaining} more pending - will process automatically)`;
+          }
+        }
         setProcessResult({
           success: true,
           processed: data.processed,
+          total: data.total,
+          remaining: data.remaining,
           errors: data.errors,
-          message: data.processed === 0
-            ? 'No new receipts found in Google Drive'
-            : `Processed ${data.processed} receipt(s)`,
+          message,
         });
         // Reload receipts if any were processed
         if (data.processed > 0) {

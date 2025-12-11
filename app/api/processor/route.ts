@@ -15,7 +15,11 @@ const CONFIG = {
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
   GOOGLE_SERVICE_ACCOUNT: process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
   PROCESSOR_SECRET: process.env.PROCESSOR_SECRET, // Optional: for securing the endpoint
+  BATCH_SIZE: 3, // Process only this many files per run to avoid timeout
 };
+
+// Extend function timeout (Pro plan allows up to 60s, Enterprise up to 300s)
+export const maxDuration = 60;
 
 // Known company codes
 const COMPANY_CODES: Record<string, string> = {
@@ -29,6 +33,8 @@ const COMPANY_CODES: Record<string, string> = {
 
 interface ProcessResult {
   processed: number;
+  total: number;
+  remaining: number;
   errors: string[];
   files: { name: string; status: string; receiptId?: string }[];
 }
@@ -90,7 +96,7 @@ export async function POST(request: Request) {
 }
 
 async function processReceipts(): Promise<ProcessResult> {
-  const result: ProcessResult = { processed: 0, errors: [], files: [] };
+  const result: ProcessResult = { processed: 0, total: 0, remaining: 0, errors: [], files: [] };
 
   // Initialize clients
   const anthropic = new Anthropic({ apiKey: CONFIG.ANTHROPIC_API_KEY });
@@ -114,10 +120,17 @@ async function processReceipts(): Promise<ProcessResult> {
   const files = response.data.files;
 
   if (!files || files.length === 0) {
-    return { processed: 0, errors: [], files: [] };
+    return { processed: 0, total: 0, remaining: 0, errors: [], files: [] };
   }
 
-  for (const file of files) {
+  result.total = files.length;
+
+  // Limit to batch size to avoid timeout (cron runs every 5 min, so will process all eventually)
+  const filesToProcess = files.slice(0, CONFIG.BATCH_SIZE);
+  result.remaining = Math.max(0, files.length - filesToProcess.length);
+  console.log(`Processing ${filesToProcess.length} of ${files.length} files (batch size: ${CONFIG.BATCH_SIZE}), ${result.remaining} remaining`);
+
+  for (const file of filesToProcess) {
     try {
       const fileResult = await processFile(file, drive, anthropic, supabase);
       result.files.push(fileResult);
